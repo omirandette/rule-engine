@@ -24,6 +24,16 @@ public final class Trie<V> {
 
     private final PatriciaTrie<List<V>> trie = new PatriciaTrie<>();
     private final List<V> emptyKeyValues = new ArrayList<>();
+    private int longestKey;
+
+    /**
+     * Returns {@code true} if this trie contains no entries.
+     *
+     * @return {@code true} if empty
+     */
+    public boolean isEmpty() {
+        return trie.isEmpty() && emptyKeyValues.isEmpty();
+    }
 
     /**
      * Inserts a value associated with the given key.
@@ -36,6 +46,7 @@ public final class Trie<V> {
         if (key.isEmpty()) {
             emptyKeyValues.add(value);
         } else {
+            longestKey = Math.max(longestKey, key.length());
             trie.computeIfAbsent(key, _ -> new ArrayList<>()).add(value);
         }
     }
@@ -51,7 +62,11 @@ public final class Trie<V> {
      */
     public List<V> findPrefixesOf(String input) {
         List<V> result = new ArrayList<>(emptyKeyValues);
-        for (int i = 1; i <= input.length(); i++) {
+        if (trie.isEmpty() || input.isEmpty()) {
+            return result;
+        }
+        int maxLen = Math.min(input.length(), longestKey);
+        for (int i = 1; i <= maxLen; i++) {
             List<V> values = trie.get(input.substring(0, i));
             if (values != null) {
                 result.addAll(values);
