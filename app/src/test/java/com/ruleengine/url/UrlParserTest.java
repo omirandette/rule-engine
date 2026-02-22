@@ -32,6 +32,7 @@ class UrlParserTest {
         ParsedUrl url = UrlParser.parse("https://example.com");
         assertEquals("example.com", url.host());
         assertEquals("", url.path());
+        assertEquals("", url.file());
     }
 
     @Test
@@ -61,6 +62,7 @@ class UrlParserTest {
         ParsedUrl url = UrlParser.parse("https://example.com/path?q=1");
         assertEquals("example.com", url.part(UrlPart.HOST));
         assertEquals("/path", url.part(UrlPart.PATH));
+        assertEquals("path", url.part(UrlPart.FILE));
         assertEquals("q=1", url.part(UrlPart.QUERY));
     }
 
@@ -69,5 +71,29 @@ class UrlParserTest {
         ParsedUrl url = UrlParser.parse("https://www.shop.example.ca/products");
         assertEquals("www.shop.example.ca", url.host());
         assertEquals("/products", url.path());
+    }
+
+    @Test
+    void extractsFileFromPath() {
+        ParsedUrl url = UrlParser.parse("https://example.com/category/sport/items");
+        assertEquals("items", url.file());
+    }
+
+    @Test
+    void fileIsEmptyForTrailingSlash() {
+        ParsedUrl url = UrlParser.parse("https://example.com/path/");
+        assertEquals("", url.file());
+    }
+
+    @Test
+    void fileIsEmptyForRootPath() {
+        ParsedUrl url = UrlParser.parse("https://example.com/");
+        assertEquals("", url.file());
+    }
+
+    @Test
+    void fileFromSingleSegmentPath() {
+        ParsedUrl url = UrlParser.parse("https://example.com/index.html");
+        assertEquals("index.html", url.file());
     }
 }
