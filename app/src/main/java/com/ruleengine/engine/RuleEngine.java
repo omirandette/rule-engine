@@ -54,8 +54,8 @@ public final class RuleEngine {
     public Optional<String> evaluate(ParsedUrl url) {
         Set<RuleIndex.ConditionRef> candidates = index.queryCandidates(url);
 
-        Set<Rule> candidateRules = new HashSet<>();
-        Set<ConditionKey> satisfiedConditions = new HashSet<>();
+        Set<Rule> candidateRules = HashSet.newHashSet(candidates.size());
+        Set<ConditionKey> satisfiedConditions = HashSet.newHashSet(candidates.size());
 
         for (RuleIndex.ConditionRef ref : candidates) {
             candidateRules.add(ref.rule());
