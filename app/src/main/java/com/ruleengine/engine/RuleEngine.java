@@ -6,8 +6,9 @@ import com.ruleengine.rule.Condition;
 import com.ruleengine.rule.Rule;
 import com.ruleengine.url.ParsedUrl;
 
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -57,38 +58,27 @@ public final class RuleEngine {
      * @return the result string of the matching rule, or {@link Optional#empty()}
      */
     public Optional<String> evaluate(ParsedUrl url) {
-        Set<RuleIndex.ConditionRef> candidates = index.queryCandidates(url);
-
-        Set<Rule> candidateRules = HashSet.newHashSet(candidates.size());
-        Set<ConditionKey> satisfiedConditions = HashSet.newHashSet(candidates.size());
-
-        for (RuleIndex.ConditionRef ref : candidates) {
-            candidateRules.add(ref.rule());
-            satisfiedConditions.add(new ConditionKey(ref.rule(), ref.condition()));
-        }
-
-        // Rules with only negated conditions won't appear in the index
-        candidateRules.addAll(allNegatedRules);
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(url);
 
         for (Rule rule : sortedRules) {
-            if (!candidateRules.contains(rule)) {
+            if (!candidates.containsKey(rule) && !allNegatedRules.contains(rule)) {
                 continue;
             }
-            if (allConditionsMet(rule, url, satisfiedConditions)) {
+            if (allConditionsMet(rule, url, candidates.getOrDefault(rule, Collections.emptySet()))) {
                 return Optional.of(rule.result());
             }
         }
         return Optional.empty();
     }
 
-    private boolean allConditionsMet(Rule rule, ParsedUrl url, Set<ConditionKey> satisfied) {
+    private boolean allConditionsMet(Rule rule, ParsedUrl url, Set<Condition> satisfied) {
         for (Condition cond : rule.conditions()) {
             if (cond.negated()) {
                 if (matchesDirect(cond, url)) {
                     return false;
                 }
             } else {
-                if (!satisfied.contains(new ConditionKey(rule, cond))) {
+                if (!satisfied.contains(cond)) {
                     return false;
                 }
             }
@@ -106,5 +96,4 @@ public final class RuleEngine {
         };
     }
 
-    private record ConditionKey(Rule rule, Condition condition) {}
 }

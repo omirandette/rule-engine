@@ -112,13 +112,14 @@ public final class RuleIndex {
     }
 
     /**
-     * Queries the index for all non-negated conditions that match the given URL.
+     * Queries the index for all non-negated conditions that match the given URL,
+     * grouped by rule.
      *
      * @param url the parsed URL to match against
-     * @return set of condition references that matched
+     * @return map from each candidate rule to its set of satisfied conditions
      */
-    public Set<ConditionRef> queryCandidates(ParsedUrl url) {
-        Set<ConditionRef> candidates = new HashSet<>();
+    public Map<Rule, Set<Condition>> queryCandidates(ParsedUrl url) {
+        Map<Rule, Set<Condition>> candidates = new HashMap<>();
         UrlPart[] parts = UrlPart.values();
 
         // Pre-compute reversed values only for parts that have ENDS_WITH rules
@@ -134,21 +135,27 @@ public final class RuleIndex {
 
             List<ConditionRef> eqRefs = equalsIndexes.get(part).get(value);
             if (eqRefs != null) {
-                candidates.addAll(eqRefs);
+                addAll(candidates, eqRefs);
             }
 
-            candidates.addAll(startsWithIndexes.get(part).findPrefixesOf(value));
+            addAll(candidates, startsWithIndexes.get(part).findPrefixesOf(value));
 
             if (reversed[part.ordinal()] != null) {
-                candidates.addAll(endsWithIndexes.get(part).findPrefixesOf(reversed[part.ordinal()]));
+                addAll(candidates, endsWithIndexes.get(part).findPrefixesOf(reversed[part.ordinal()]));
             }
 
             if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
-                candidates.addAll(containsAcIndexes.get(part).search(value));
+                addAll(candidates, containsAcIndexes.get(part).search(value));
             } else {
-                candidates.addAll(containsTrieIndexes.get(part).findSubstringsOf(value));
+                addAll(candidates, containsTrieIndexes.get(part).findSubstringsOf(value));
             }
         }
         return candidates;
+    }
+
+    private void addAll(Map<Rule, Set<Condition>> candidates, List<ConditionRef> refs) {
+        for (ConditionRef ref : refs) {
+            candidates.computeIfAbsent(ref.rule(), _ -> new HashSet<>()).add(ref.condition());
+        }
     }
 }
