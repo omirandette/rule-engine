@@ -1,17 +1,18 @@
 package com.ruleengine.index;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-
-import org.apache.commons.collections4.trie.PatriciaTrie;
+import java.util.Map;
 
 /**
- * A generic prefix trie that maps string keys to lists of values.
+ * A character-based trie that maps string keys to lists of values.
  *
- * <p>Backed by Apache Commons {@link PatriciaTrie}. Supports three query modes:
+ * <p>Supports three query modes:
  * <ul>
  *   <li>{@link #findPrefixesOf(String)} — returns values for all keys that are prefixes of the input
- *       (used for {@code STARTS_WITH} matching)</li>
+ *       (used for {@code STARTS_WITH} matching). Walks the trie character by character with no
+ *       substring allocations.</li>
  *   <li>{@link #findSubstringsOf(String)} — returns values for all keys that appear as substrings
  *       of the input (used for {@code CONTAINS} matching via the TRIE strategy)</li>
  * </ul>
@@ -22,9 +23,9 @@ import org.apache.commons.collections4.trie.PatriciaTrie;
  */
 public final class Trie<V> {
 
-    private final PatriciaTrie<List<V>> trie = new PatriciaTrie<>();
+    private final Node root = new Node();
     private final List<V> emptyKeyValues = new ArrayList<>();
-    private int longestKey;
+    private boolean hasKeys;
 
     /**
      * Returns {@code true} if this trie contains no entries.
@@ -32,7 +33,7 @@ public final class Trie<V> {
      * @return {@code true} if empty
      */
     public boolean isEmpty() {
-        return trie.isEmpty() && emptyKeyValues.isEmpty();
+        return !hasKeys && emptyKeyValues.isEmpty();
     }
 
     /**
@@ -43,18 +44,26 @@ public final class Trie<V> {
      * @param value the value to associate
      */
     public void insert(String key, V value) {
+        hasKeys = true;
         if (key.isEmpty()) {
             emptyKeyValues.add(value);
-        } else {
-            longestKey = Math.max(longestKey, key.length());
-            trie.computeIfAbsent(key, _ -> new ArrayList<>()).add(value);
+            return;
         }
+        Node current = root;
+        for (int i = 0; i < key.length(); i++) {
+            current = current.childOrCreate(key.charAt(i));
+        }
+        if (current.values == null) {
+            current.values = new ArrayList<>(2);
+        }
+        current.values.add(value);
     }
 
     /**
      * Returns all values whose keys are prefixes of the given input.
      *
-     * <p>For example, if {@code "ab"} and {@code "abc"} are inserted,
+     * <p>Walks the trie character by character with no substring allocations.
+     * For example, if {@code "ab"} and {@code "abc"} are inserted,
      * {@code findPrefixesOf("abcd")} returns values for both.
      *
      * @param input the string to match prefixes against
@@ -62,14 +71,14 @@ public final class Trie<V> {
      */
     public List<V> findPrefixesOf(String input) {
         List<V> result = new ArrayList<>(emptyKeyValues);
-        if (trie.isEmpty() || input.isEmpty()) {
-            return result;
-        }
-        int maxLen = Math.min(input.length(), longestKey);
-        for (int i = 1; i <= maxLen; i++) {
-            List<V> values = trie.get(input.substring(0, i));
-            if (values != null) {
-                result.addAll(values);
+        Node current = root;
+        for (int i = 0; i < input.length(); i++) {
+            current = current.child(input.charAt(i));
+            if (current == null) {
+                break;
+            }
+            if (current.values != null) {
+                result.addAll(current.values);
             }
         }
         return result;
@@ -78,8 +87,8 @@ public final class Trie<V> {
     /**
      * Returns all values whose keys appear as substrings of the given input.
      *
-     * <p>Iterates every starting position in the input and checks all prefixes
-     * from that position against the trie.
+     * <p>For each starting position, walks the trie character by character
+     * collecting matches. No substring allocations are performed.
      *
      * @param input the string to search for substrings in
      * @return list of values whose keys are substrings of {@code input}
@@ -87,13 +96,33 @@ public final class Trie<V> {
     public List<V> findSubstringsOf(String input) {
         List<V> result = new ArrayList<>(emptyKeyValues);
         for (int start = 0; start < input.length(); start++) {
-            for (int end = start + 1; end <= input.length(); end++) {
-                List<V> values = trie.get(input.substring(start, end));
-                if (values != null) {
-                    result.addAll(values);
+            Node current = root;
+            for (int i = start; i < input.length(); i++) {
+                current = current.child(input.charAt(i));
+                if (current == null) {
+                    break;
+                }
+                if (current.values != null) {
+                    result.addAll(current.values);
                 }
             }
         }
         return result;
+    }
+
+    private final class Node {
+        Map<Character, Node> children;
+        List<V> values;
+
+        Node child(char c) {
+            return children == null ? null : children.get(c);
+        }
+
+        Node childOrCreate(char c) {
+            if (children == null) {
+                children = new HashMap<>(4);
+            }
+            return children.computeIfAbsent(c, _ -> new Node());
+        }
     }
 }
