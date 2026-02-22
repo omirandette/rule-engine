@@ -11,29 +11,50 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Evaluates a parsed URL against a set of rules and returns the result
+ * of the highest-priority matching rule.
+ *
+ * <p>Matching is accelerated by a {@link RuleIndex} for non-negated conditions.
+ * Negated conditions are evaluated directly at match time. Rules are evaluated
+ * in descending priority order; ties are broken by definition order.
+ */
 public final class RuleEngine {
 
     private final List<Rule> sortedRules;
     private final RuleIndex index;
 
+    /**
+     * Creates an engine with the specified contains strategy.
+     *
+     * @param rules             the rules to evaluate
+     * @param containsStrategy  the data structure for CONTAINS matching
+     */
     public RuleEngine(List<Rule> rules, ContainsStrategy containsStrategy) {
         this.sortedRules = rules.stream().sorted().toList();
         this.index = new RuleIndex(rules, containsStrategy);
     }
 
+    /**
+     * Creates an engine using the default {@link ContainsStrategy#TRIE} strategy.
+     *
+     * @param rules the rules to evaluate
+     */
     public RuleEngine(List<Rule> rules) {
         this(rules, ContainsStrategy.TRIE);
     }
 
-    public record UrlResult(String url, String result) {}
-
+    /**
+     * Evaluates a parsed URL against all rules and returns the result of the
+     * highest-priority matching rule, or empty if no rule matches.
+     *
+     * @param url the parsed URL to evaluate
+     * @return the result string of the matching rule, or {@link Optional#empty()}
+     */
     public Optional<String> evaluate(ParsedUrl url) {
-        // Query the index to get all non-negated conditions that matched
         Set<RuleIndex.ConditionRef> candidates = index.queryCandidates(url);
 
-        // Collect rules that have at least one indexed condition match
         Set<Rule> candidateRules = new HashSet<>();
-        // Track which (rule, condition) pairs were satisfied by the index
         Set<ConditionKey> satisfiedConditions = new HashSet<>();
 
         for (RuleIndex.ConditionRef ref : candidates) {
@@ -41,14 +62,13 @@ public final class RuleEngine {
             satisfiedConditions.add(new ConditionKey(ref.rule(), ref.condition()));
         }
 
-        // Also add rules that have ONLY negated conditions (they won't appear in index)
+        // Rules with only negated conditions won't appear in the index
         for (Rule rule : sortedRules) {
             if (rule.conditions().stream().allMatch(Condition::negated)) {
                 candidateRules.add(rule);
             }
         }
 
-        // Evaluate in priority order
         for (Rule rule : sortedRules) {
             if (!candidateRules.contains(rule)) {
                 continue;
@@ -63,12 +83,10 @@ public final class RuleEngine {
     private boolean allConditionsMet(Rule rule, ParsedUrl url, Set<ConditionKey> satisfied) {
         for (Condition cond : rule.conditions()) {
             if (cond.negated()) {
-                // Negated conditions are checked directly
                 if (matchesDirect(cond, url)) {
-                    return false; // The condition matched, but it's negated → rule fails
+                    return false;
                 }
             } else {
-                // Non-negated: must be in the satisfied set from the index
                 if (!satisfied.contains(new ConditionKey(rule, cond))) {
                     return false;
                 }
