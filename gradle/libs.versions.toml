@@ -5,8 +5,12 @@
 guava = "33.4.6-jre"
 gson = "2.11.0"
 junit-jupiter = "5.12.1"
+commons-collections4 = "4.5.0"
+ahocorasick = "0.6.3"
 
 [libraries]
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+commons-collections4 = { module = "org.apache.commons:commons-collections4", version.ref = "commons-collections4" }
+ahocorasick = { module = "org.ahocorasick:ahocorasick", version.ref = "ahocorasick" }
