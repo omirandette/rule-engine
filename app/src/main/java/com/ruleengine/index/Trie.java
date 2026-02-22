@@ -26,6 +26,15 @@ public final class Trie<V> {
     private final List<V> emptyKeyValues = new ArrayList<>();
 
     /**
+     * Returns {@code true} if this trie contains no entries.
+     *
+     * @return {@code true} if empty
+     */
+    public boolean isEmpty() {
+        return trie.isEmpty() && emptyKeyValues.isEmpty();
+    }
+
+    /**
      * Inserts a value associated with the given key.
      * Multiple values can be stored under the same key.
      *
