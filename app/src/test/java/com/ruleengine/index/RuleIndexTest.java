@@ -34,7 +34,7 @@ class RuleIndexTest {
         Rule r = rule("eq", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("example.com", "/", ""));
+        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("example.com", "/", "", ""));
         assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("eq")));
     }
 
@@ -44,7 +44,7 @@ class RuleIndexTest {
         Rule r = rule("eq", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("other.com", "/", ""));
+        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("other.com", "/", "", ""));
         assertTrue(refs.isEmpty());
     }
 
@@ -54,7 +54,7 @@ class RuleIndexTest {
         Rule r = rule("sw", cond(UrlPart.PATH, Operator.STARTS_WITH, "/api"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/api/users", ""));
+        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/api/users", "users", ""));
         assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("sw")));
     }
 
@@ -64,7 +64,7 @@ class RuleIndexTest {
         Rule r = rule("ew", cond(UrlPart.HOST, Operator.ENDS_WITH, ".ca"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("shop.example.ca", "/", ""));
+        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("shop.example.ca", "/", "", ""));
         assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("ew")));
     }
 
@@ -74,7 +74,7 @@ class RuleIndexTest {
         Rule r = rule("ct", cond(UrlPart.PATH, Operator.CONTAINS, "sport"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/category/sport/items", ""));
+        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/category/sport/items", "items", ""));
         assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("ct")));
     }
 
@@ -84,8 +84,7 @@ class RuleIndexTest {
         Rule r = rule("neg", negCond(UrlPart.PATH, Operator.STARTS_WITH, "/admin"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        // The negated condition should not produce any indexed matches
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/admin/panel", ""));
+        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/admin/panel", "panel", ""));
         assertTrue(refs.isEmpty());
     }
 
@@ -97,7 +96,7 @@ class RuleIndexTest {
         RuleIndex index = new RuleIndex(List.of(r1, r2, r3));
 
         Set<RuleIndex.ConditionRef> refs = index.queryCandidates(
-                new ParsedUrl("example.com", "/sport", ""));
+                new ParsedUrl("example.com", "/sport", "sport", ""));
 
         Set<String> ruleNames = new java.util.HashSet<>();
         for (RuleIndex.ConditionRef cr : refs) {
@@ -112,7 +111,7 @@ class RuleIndexTest {
         RuleIndex index = new RuleIndex(List.of(r));
 
         Set<RuleIndex.ConditionRef> refs = index.queryCandidates(
-                new ParsedUrl("x.com", "/", "q=hello&lang=en"));
+                new ParsedUrl("x.com", "/", "", "q=hello&lang=en"));
         assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("qp")));
     }
 }
