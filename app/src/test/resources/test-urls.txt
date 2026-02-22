@@ -1,0 +1,5 @@
+https://shop.example.ca/category/sport/items
+https://example.com/
+https://example.com/admin/panel
+https://example.com/user/profile
+https://news.example.ca/sport/hockey
