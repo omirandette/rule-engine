@@ -36,12 +36,12 @@ public final class RuleEngine {
     }
 
     /**
-     * Creates an engine using the default {@link ContainsStrategy#TRIE} strategy.
+     * Creates an engine using the default {@link ContainsStrategy#AHO_CORASICK} strategy.
      *
      * @param rules the rules to evaluate
      */
     public RuleEngine(List<Rule> rules) {
-        this(rules, ContainsStrategy.TRIE);
+        this(rules, ContainsStrategy.AHO_CORASICK);
     }
 
     /**
