@@ -65,7 +65,8 @@ class RuleEngineIntegrationTest {
 
     /**
      * Loads all rules from JSON, reads URLs from file, runs BatchProcessor,
-     * and asserts expected results including priority ordering.
+     * and asserts expected results including priority ordering. Then validates
+     * every single-condition rule matches the canonical URL through the pipeline.
      */
     @ParameterizedTest
     @EnumSource(ContainsStrategy.class)
@@ -84,6 +85,21 @@ class RuleEngineIntegrationTest {
                 "second URL should match compound-all-neg (priority 10)");
         assertEquals("compound-all-neg", results.get(2).result(),
                 "third URL should match compound-all-neg (priority 10)");
+
+        List<String> canonicalBatch = List.of(CANONICAL_URL);
+        List<String> singleRuleNames = allSingleConditionRuleNames().toList();
+        for (Rule rule : rules) {
+            if (!singleRuleNames.contains(rule.name())) {
+                continue;
+            }
+            BatchProcessor singleProcessor = new BatchProcessor(
+                    new RuleEngine(List.of(rule), strategy));
+            List<BatchProcessor.UrlResult> singleResult =
+                    singleProcessor.processLines(canonicalBatch);
+            assertEquals(1, singleResult.size());
+            assertEquals(rule.name(), singleResult.get(0).result(),
+                    "Rule " + rule.name() + " should match canonical URL via batch pipeline");
+        }
     }
 
     /**
