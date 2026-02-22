@@ -14,20 +14,43 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Indexes non-negated rule conditions by (UrlPart, Operator) for fast lookup.
+ *
+ * <p>Each operator type is backed by an appropriate data structure:
+ * <ul>
+ *   <li>{@code EQUALS} — {@link HashMap} for O(1) lookup</li>
+ *   <li>{@code STARTS_WITH} — {@link Trie} for prefix matching</li>
+ *   <li>{@code ENDS_WITH} — {@link Trie} on reversed strings</li>
+ *   <li>{@code CONTAINS} — {@link Trie} or {@link AhoCorasick} (selected via {@link ContainsStrategy})</li>
+ * </ul>
+ *
+ * <p>Negated conditions are excluded from the index and must be evaluated directly at match time.
+ */
 public final class RuleIndex {
 
+    /**
+     * A reference linking a condition back to its parent rule.
+     *
+     * @param rule      the rule containing this condition
+     * @param condition the specific condition that matched
+     */
     public record ConditionRef(Rule rule, Condition condition) {}
 
-    // Per (UrlPart, Operator) indexes
     private final Map<UrlPart, Map<String, List<ConditionRef>>> equalsIndexes;
     private final Map<UrlPart, Trie<ConditionRef>> startsWithIndexes;
     private final Map<UrlPart, Trie<ConditionRef>> endsWithIndexes;
 
-    // CONTAINS: backed by either Trie or AhoCorasick
     private final ContainsStrategy containsStrategy;
     private final Map<UrlPart, Trie<ConditionRef>> containsTrieIndexes;
     private final Map<UrlPart, AhoCorasick<ConditionRef>> containsAcIndexes;
 
+    /**
+     * Builds the index from a list of rules using the specified contains strategy.
+     *
+     * @param rules             the rules to index
+     * @param containsStrategy  the data structure to use for CONTAINS matching
+     */
     public RuleIndex(List<Rule> rules, ContainsStrategy containsStrategy) {
         this.containsStrategy = containsStrategy;
         this.equalsIndexes = new EnumMap<>(UrlPart.class);
@@ -50,7 +73,7 @@ public final class RuleIndex {
         for (Rule rule : rules) {
             for (Condition cond : rule.conditions()) {
                 if (cond.negated()) {
-                    continue; // negated conditions are not indexed
+                    continue;
                 }
                 ConditionRef ref = new ConditionRef(rule, cond);
                 switch (cond.operator()) {
@@ -72,7 +95,6 @@ public final class RuleIndex {
             }
         }
 
-        // Build Aho-Corasick automata if that strategy was chosen
         if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
             for (AhoCorasick<ConditionRef> ac : containsAcIndexes.values()) {
                 ac.build();
@@ -80,33 +102,36 @@ public final class RuleIndex {
         }
     }
 
+    /**
+     * Builds the index using the default {@link ContainsStrategy#TRIE} strategy.
+     *
+     * @param rules the rules to index
+     */
     public RuleIndex(List<Rule> rules) {
         this(rules, ContainsStrategy.TRIE);
     }
 
     /**
-     * Query the index for a parsed URL and return all matching ConditionRefs
-     * (only non-negated conditions that matched).
+     * Queries the index for all non-negated conditions that match the given URL.
+     *
+     * @param url the parsed URL to match against
+     * @return set of condition references that matched
      */
     public Set<ConditionRef> queryCandidates(ParsedUrl url) {
         Set<ConditionRef> candidates = new HashSet<>();
         for (UrlPart part : UrlPart.values()) {
             String value = url.part(part);
 
-            // EQUALS
             List<ConditionRef> eqRefs = equalsIndexes.get(part).get(value);
             if (eqRefs != null) {
                 candidates.addAll(eqRefs);
             }
 
-            // STARTS_WITH
             candidates.addAll(startsWithIndexes.get(part).findPrefixesOf(value));
 
-            // ENDS_WITH (reverse the input)
             String reversed = new StringBuilder(value).reverse().toString();
             candidates.addAll(endsWithIndexes.get(part).findPrefixesOf(reversed));
 
-            // CONTAINS
             if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
                 candidates.addAll(containsAcIndexes.get(part).search(value));
             } else {
