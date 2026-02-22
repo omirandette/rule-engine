@@ -23,6 +23,7 @@ dependencies {
 
     // This dependency is used by the application.
     implementation(libs.guava)
+    implementation(libs.gson)
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
@@ -40,4 +41,16 @@ application {
 tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
+}
+
+tasks.named<Javadoc>("javadoc") {
+    options {
+        this as StandardJavadocDocletOptions
+        addStringOption("Xdoclint:none", "-quiet")
+        encoding = "UTF-8"
+    }
+}
+
+tasks.named("build") {
+    dependsOn("javadoc")
 }
