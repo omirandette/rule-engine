@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Evaluates a parsed URL against a set of rules and returns the result
@@ -23,6 +24,7 @@ public final class RuleEngine {
 
     private final List<Rule> sortedRules;
     private final RuleIndex index;
+    private final Set<Rule> allNegatedRules;
 
     /**
      * Creates an engine with the specified contains strategy.
@@ -33,6 +35,9 @@ public final class RuleEngine {
     public RuleEngine(List<Rule> rules, ContainsStrategy containsStrategy) {
         this.sortedRules = rules.stream().sorted().toList();
         this.index = new RuleIndex(rules, containsStrategy);
+        this.allNegatedRules = sortedRules.stream()
+                .filter(r -> r.conditions().stream().allMatch(Condition::negated))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
@@ -63,11 +68,7 @@ public final class RuleEngine {
         }
 
         // Rules with only negated conditions won't appear in the index
-        for (Rule rule : sortedRules) {
-            if (rule.conditions().stream().allMatch(Condition::negated)) {
-                candidateRules.add(rule);
-            }
-        }
+        candidateRules.addAll(allNegatedRules);
 
         for (Rule rule : sortedRules) {
             if (!candidateRules.contains(rule)) {
