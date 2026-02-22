@@ -16,6 +16,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * Loads {@link Rule} definitions from JSON.
+ *
+ * <p>Expected JSON format is an array of rule objects:
+ * <pre>{@code
+ * [
+ *   {
+ *     "name": "Canada Sport",
+ *     "priority": 10,
+ *     "conditions": [
+ *       { "part": "host", "operator": "ends_with", "value": ".ca" },
+ *       { "part": "path", "operator": "contains", "value": "sport" }
+ *     ],
+ *     "result": "Canada Sport"
+ *   }
+ * ]
+ * }</pre>
+ */
 public final class RuleLoader {
 
     private static final Gson GSON = new GsonBuilder()
@@ -26,12 +44,25 @@ public final class RuleLoader {
 
     private RuleLoader() {}
 
+    /**
+     * Loads rules from a JSON file.
+     *
+     * @param path path to the JSON rules file
+     * @return an immutable list of rules
+     * @throws IOException if the file cannot be read
+     */
     public static List<Rule> loadFromFile(Path path) throws IOException {
         try (Reader reader = Files.newBufferedReader(path)) {
             return load(reader);
         }
     }
 
+    /**
+     * Loads rules from a reader providing JSON content.
+     *
+     * @param reader the JSON source
+     * @return an immutable list of rules
+     */
     public static List<Rule> load(Reader reader) {
         List<Rule> rules = GSON.fromJson(reader, RULE_LIST_TYPE);
         if (rules == null) {
