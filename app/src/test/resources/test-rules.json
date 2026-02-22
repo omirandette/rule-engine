@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Canada Sport",
+    "priority": 10,
+    "conditions": [
+      { "part": "host", "operator": "ends_with", "value": ".ca" },
+      { "part": "path", "operator": "contains", "value": "sport" }
+    ],
+    "result": "Canada Sport"
+  },
+  {
+    "name": "Example Home",
+    "priority": 5,
+    "conditions": [
+      { "part": "host", "operator": "equals", "value": "example.com" },
+      { "part": "path", "operator": "equals", "value": "/" }
+    ],
+    "result": "Example Home"
+  },
+  {
+    "name": "Not Admin",
+    "priority": 3,
+    "conditions": [
+      { "part": "path", "operator": "starts_with", "value": "/admin", "negated": true }
+    ],
+    "result": "Not Admin"
+  }
+]
