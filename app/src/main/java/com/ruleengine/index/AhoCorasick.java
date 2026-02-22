@@ -1,29 +1,30 @@
 package com.ruleengine.index;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
+
+import org.ahocorasick.trie.Emit;
 
 /**
  * Aho-Corasick automaton for efficient multi-pattern substring matching.
  *
- * <p>Usage:
+ * <p>Backed by the robert-bor Aho-Corasick library. Usage:
  * <ol>
  *   <li>Insert patterns with {@link #insert(String, Object)}</li>
- *   <li>Call {@link #build()} to construct failure and output links</li>
+ *   <li>Call {@link #build()} to construct the automaton</li>
  *   <li>Call {@link #search(String)} to find all pattern matches in a text</li>
  * </ol>
- *
- * <p>Search runs in O(n + z) where n = text length and z = number of matches.
  *
  * @param <V> the type of values associated with each pattern
  */
 public final class AhoCorasick<V> {
 
-    private final Node<V> root = new Node<>();
+    private final Map<String, List<V>> valueMap = new HashMap<>();
+    private final List<V> emptyPatternValues = new ArrayList<>();
+    private org.ahocorasick.trie.Trie trie;
     private boolean built = false;
 
     /**
@@ -37,39 +38,23 @@ public final class AhoCorasick<V> {
         if (built) {
             throw new IllegalStateException("Cannot insert after build()");
         }
-        Node<V> current = root;
-        for (int i = 0; i < pattern.length(); i++) {
-            current = current.children.computeIfAbsent(pattern.charAt(i), _ -> new Node<>());
+        if (pattern.isEmpty()) {
+            emptyPatternValues.add(value);
+        } else {
+            valueMap.computeIfAbsent(pattern, _ -> new ArrayList<>()).add(value);
         }
-        current.values.add(value);
     }
 
     /**
-     * Constructs the failure and output links via BFS.
-     * Must be called exactly once after all patterns are inserted and before any search.
+     * Constructs the automaton.
+     * Must be called after all patterns are inserted and before any search.
      */
     public void build() {
-        Queue<Node<V>> queue = new LinkedList<>();
-        for (Node<V> child : root.children.values()) {
-            child.failure = root;
-            queue.add(child);
+        org.ahocorasick.trie.Trie.TrieBuilder builder = org.ahocorasick.trie.Trie.builder();
+        for (String pattern : valueMap.keySet()) {
+            builder.addKeyword(pattern);
         }
-        while (!queue.isEmpty()) {
-            Node<V> current = queue.poll();
-            for (Map.Entry<Character, Node<V>> entry : current.children.entrySet()) {
-                char ch = entry.getKey();
-                Node<V> child = entry.getValue();
-                Node<V> fail = current.failure;
-                while (fail != null && !fail.children.containsKey(ch)) {
-                    fail = fail.failure;
-                }
-                child.failure = (fail == null) ? root : fail.children.get(ch);
-                child.outputLink = child.failure.values.isEmpty()
-                        ? child.failure.outputLink
-                        : child.failure;
-                queue.add(child);
-            }
-        }
+        trie = builder.build();
         built = true;
     }
 
@@ -84,29 +69,14 @@ public final class AhoCorasick<V> {
         if (!built) {
             throw new IllegalStateException("Must call build() before search()");
         }
-        List<V> result = new ArrayList<>();
-        result.addAll(root.values);
-        Node<V> current = root;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            while (current != root && !current.children.containsKey(ch)) {
-                current = current.failure;
-            }
-            current = current.children.getOrDefault(ch, root);
-            result.addAll(current.values);
-            Node<V> out = current.outputLink;
-            while (out != null) {
-                result.addAll(out.values);
-                out = out.outputLink;
+        List<V> result = new ArrayList<>(emptyPatternValues);
+        Collection<Emit> emits = trie.parseText(text);
+        for (Emit emit : emits) {
+            List<V> values = valueMap.get(emit.getKeyword());
+            if (values != null) {
+                result.addAll(values);
             }
         }
         return result;
-    }
-
-    private static final class Node<V> {
-        final Map<Character, Node<V>> children = new HashMap<>();
-        final List<V> values = new ArrayList<>();
-        Node<V> failure;
-        Node<V> outputLink;
     }
 }
