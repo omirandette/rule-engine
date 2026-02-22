@@ -26,6 +26,16 @@ class RuleEngineTest {
         return new Condition(part, op, value, true);
     }
 
+    /** Shorthand to build a ParsedUrl with an auto-derived file component. */
+    private ParsedUrl url(String host, String path, String query) {
+        String file = "";
+        if (!path.isEmpty()) {
+            int lastSlash = path.lastIndexOf('/');
+            file = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
+        }
+        return new ParsedUrl(host, path, file, query);
+    }
+
     // --- Isolated operator tests ---
 
     @Test
@@ -33,8 +43,8 @@ class RuleEngineTest {
         Rule r = rule("eq", 1, "matched", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(new ParsedUrl("example.com", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("other.com", "/", "")));
+        assertEquals(Optional.of("matched"), engine.evaluate(url("example.com", "/", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("other.com", "/", "")));
     }
 
     @Test
@@ -42,8 +52,8 @@ class RuleEngineTest {
         Rule r = rule("ct", 1, "matched", cond(UrlPart.PATH, Operator.CONTAINS, "sport"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(new ParsedUrl("x.com", "/category/sport/items", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("x.com", "/category/news", "")));
+        assertEquals(Optional.of("matched"), engine.evaluate(url("x.com", "/category/sport/items", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/category/news", "")));
     }
 
     @Test
@@ -51,8 +61,8 @@ class RuleEngineTest {
         Rule r = rule("sw", 1, "matched", cond(UrlPart.PATH, Operator.STARTS_WITH, "/api"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(new ParsedUrl("x.com", "/api/users", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("x.com", "/web/api", "")));
+        assertEquals(Optional.of("matched"), engine.evaluate(url("x.com", "/api/users", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/web/api", "")));
     }
 
     @Test
@@ -60,8 +70,8 @@ class RuleEngineTest {
         Rule r = rule("ew", 1, "matched", cond(UrlPart.HOST, Operator.ENDS_WITH, ".ca"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(new ParsedUrl("shop.example.ca", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("shop.example.com", "/", "")));
+        assertEquals(Optional.of("matched"), engine.evaluate(url("shop.example.ca", "/", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("shop.example.com", "/", "")));
     }
 
     // --- Negation tests ---
@@ -72,8 +82,8 @@ class RuleEngineTest {
                 negCond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("not-example"), engine.evaluate(new ParsedUrl("other.com", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("example.com", "/", "")));
+        assertEquals(Optional.of("not-example"), engine.evaluate(url("other.com", "/", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("example.com", "/", "")));
     }
 
     @Test
@@ -82,8 +92,8 @@ class RuleEngineTest {
                 negCond(UrlPart.PATH, Operator.CONTAINS, "sport"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("no-sport"), engine.evaluate(new ParsedUrl("x.com", "/news", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("x.com", "/sport/live", "")));
+        assertEquals(Optional.of("no-sport"), engine.evaluate(url("x.com", "/news", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/sport/live", "")));
     }
 
     @Test
@@ -92,8 +102,8 @@ class RuleEngineTest {
                 negCond(UrlPart.PATH, Operator.STARTS_WITH, "/admin"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("not-admin"), engine.evaluate(new ParsedUrl("x.com", "/user", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("x.com", "/admin/panel", "")));
+        assertEquals(Optional.of("not-admin"), engine.evaluate(url("x.com", "/user", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/admin/panel", "")));
     }
 
     @Test
@@ -102,8 +112,8 @@ class RuleEngineTest {
                 negCond(UrlPart.HOST, Operator.ENDS_WITH, ".ca"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("not-ca"), engine.evaluate(new ParsedUrl("example.com", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("example.ca", "/", "")));
+        assertEquals(Optional.of("not-ca"), engine.evaluate(url("example.com", "/", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("example.ca", "/", "")));
     }
 
     // --- Compound rule tests ---
@@ -116,13 +126,11 @@ class RuleEngineTest {
         RuleEngine engine = new RuleEngine(List.of(r));
 
         assertEquals(Optional.of("Canada Sport"),
-                engine.evaluate(new ParsedUrl("shop.example.ca", "/category/sport/items", "")));
-        // Host matches but path doesn't
+                engine.evaluate(url("shop.example.ca", "/category/sport/items", "")));
         assertEquals(Optional.empty(),
-                engine.evaluate(new ParsedUrl("shop.example.ca", "/category/news", "")));
-        // Path matches but host doesn't
+                engine.evaluate(url("shop.example.ca", "/category/news", "")));
         assertEquals(Optional.empty(),
-                engine.evaluate(new ParsedUrl("shop.example.com", "/category/sport", "")));
+                engine.evaluate(url("shop.example.com", "/category/sport", "")));
     }
 
     @Test
@@ -133,11 +141,11 @@ class RuleEngineTest {
         RuleEngine engine = new RuleEngine(List.of(r));
 
         assertEquals(Optional.of("result"),
-                engine.evaluate(new ParsedUrl("example.com", "/user", "")));
+                engine.evaluate(url("example.com", "/user", "")));
         assertEquals(Optional.empty(),
-                engine.evaluate(new ParsedUrl("example.com", "/admin/panel", "")));
+                engine.evaluate(url("example.com", "/admin/panel", "")));
         assertEquals(Optional.empty(),
-                engine.evaluate(new ParsedUrl("other.com", "/user", "")));
+                engine.evaluate(url("other.com", "/user", "")));
     }
 
     // --- Priority tests ---
@@ -151,7 +159,7 @@ class RuleEngineTest {
         RuleEngine engine = new RuleEngine(List.of(low, high));
 
         assertEquals(Optional.of("high-result"),
-                engine.evaluate(new ParsedUrl("example.com", "/", "")));
+                engine.evaluate(url("example.com", "/", "")));
     }
 
     @Test
@@ -162,8 +170,7 @@ class RuleEngineTest {
                 cond(UrlPart.HOST, Operator.ENDS_WITH, ".com"));
         RuleEngine engine = new RuleEngine(List.of(first, second));
 
-        // Both match, same priority — first defined wins (stable sort)
-        Optional<String> result = engine.evaluate(new ParsedUrl("example.com", "/", ""));
+        Optional<String> result = engine.evaluate(url("example.com", "/", ""));
         assertEquals(Optional.of("first-result"), result);
     }
 
@@ -176,7 +183,7 @@ class RuleEngineTest {
         RuleEngine engine = new RuleEngine(List.of(high, low));
 
         assertEquals(Optional.of("low-result"),
-                engine.evaluate(new ParsedUrl("example.com", "/", "")));
+                engine.evaluate(url("example.com", "/", "")));
     }
 
     // --- Edge cases ---
@@ -184,14 +191,14 @@ class RuleEngineTest {
     @Test
     void noRulesReturnsEmpty() {
         RuleEngine engine = new RuleEngine(List.of());
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("x.com", "/", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/", "")));
     }
 
     @Test
     void noMatchReturnsEmpty() {
         Rule r = rule("r", 1, "result", cond(UrlPart.HOST, Operator.EQUALS, "specific.com"));
         RuleEngine engine = new RuleEngine(List.of(r));
-        assertEquals(Optional.empty(), engine.evaluate(new ParsedUrl("other.com", "/", "")));
+        assertEquals(Optional.empty(), engine.evaluate(url("other.com", "/", "")));
     }
 
     @Test
@@ -201,9 +208,9 @@ class RuleEngineTest {
         RuleEngine engine = new RuleEngine(List.of(r));
 
         assertEquals(Optional.of("query-match"),
-                engine.evaluate(new ParsedUrl("x.com", "/", "q=test&lang=en")));
+                engine.evaluate(url("x.com", "/", "q=test&lang=en")));
         assertEquals(Optional.empty(),
-                engine.evaluate(new ParsedUrl("x.com", "/", "q=test&lang=fr")));
+                engine.evaluate(url("x.com", "/", "q=test&lang=fr")));
     }
 
     @Test
@@ -213,6 +220,18 @@ class RuleEngineTest {
         RuleEngine engine = new RuleEngine(List.of(r));
 
         assertEquals(Optional.of("matched"),
-                engine.evaluate(new ParsedUrl("example.com", "", "")));
+                engine.evaluate(url("example.com", "", "")));
+    }
+
+    @Test
+    void filePartMatching() {
+        Rule r = rule("html", 1, "html-file",
+                cond(UrlPart.FILE, Operator.ENDS_WITH, ".html"));
+        RuleEngine engine = new RuleEngine(List.of(r));
+
+        assertEquals(Optional.of("html-file"),
+                engine.evaluate(url("x.com", "/page/index.html", "")));
+        assertEquals(Optional.empty(),
+                engine.evaluate(url("x.com", "/page/data.json", "")));
     }
 }
