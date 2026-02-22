@@ -7,11 +7,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
+/**
+ * Aho-Corasick automaton for efficient multi-pattern substring matching.
+ *
+ * <p>Usage:
+ * <ol>
+ *   <li>Insert patterns with {@link #insert(String, Object)}</li>
+ *   <li>Call {@link #build()} to construct failure and output links</li>
+ *   <li>Call {@link #search(String)} to find all pattern matches in a text</li>
+ * </ol>
+ *
+ * <p>Search runs in O(n + z) where n = text length and z = number of matches.
+ *
+ * @param <V> the type of values associated with each pattern
+ */
 public final class AhoCorasick<V> {
 
     private final Node<V> root = new Node<>();
     private boolean built = false;
 
+    /**
+     * Inserts a pattern with an associated value into the automaton.
+     *
+     * @param pattern the pattern string
+     * @param value   the value to return when this pattern is found
+     * @throws IllegalStateException if called after {@link #build()}
+     */
     public void insert(String pattern, V value) {
         if (built) {
             throw new IllegalStateException("Cannot insert after build()");
@@ -23,26 +44,26 @@ public final class AhoCorasick<V> {
         current.values.add(value);
     }
 
+    /**
+     * Constructs the failure and output links via BFS.
+     * Must be called exactly once after all patterns are inserted and before any search.
+     */
     public void build() {
         Queue<Node<V>> queue = new LinkedList<>();
-        // Initialize depth-1 nodes: failure -> root
         for (Node<V> child : root.children.values()) {
             child.failure = root;
             queue.add(child);
         }
-        // BFS to build failure and output links
         while (!queue.isEmpty()) {
             Node<V> current = queue.poll();
             for (Map.Entry<Character, Node<V>> entry : current.children.entrySet()) {
                 char ch = entry.getKey();
                 Node<V> child = entry.getValue();
-                // Walk failure chain of parent to find failure for child
                 Node<V> fail = current.failure;
                 while (fail != null && !fail.children.containsKey(ch)) {
                     fail = fail.failure;
                 }
                 child.failure = (fail == null) ? root : fail.children.get(ch);
-                // Output link: nearest node in failure chain that has values
                 child.outputLink = child.failure.values.isEmpty()
                         ? child.failure.outputLink
                         : child.failure;
@@ -52,12 +73,18 @@ public final class AhoCorasick<V> {
         built = true;
     }
 
+    /**
+     * Searches the text for all inserted patterns and returns their associated values.
+     *
+     * @param text the text to search
+     * @return list of values for all patterns found in the text
+     * @throws IllegalStateException if {@link #build()} has not been called
+     */
     public List<V> search(String text) {
         if (!built) {
             throw new IllegalStateException("Must call build() before search()");
         }
         List<V> result = new ArrayList<>();
-        // Empty-pattern matches
         result.addAll(root.values);
         Node<V> current = root;
         for (int i = 0; i < text.length(); i++) {
@@ -66,9 +93,7 @@ public final class AhoCorasick<V> {
                 current = current.failure;
             }
             current = current.children.getOrDefault(ch, root);
-            // Collect values from this node
             result.addAll(current.values);
-            // Walk output links for additional matches
             Node<V> out = current.outputLink;
             while (out != null) {
                 result.addAll(out.values);
