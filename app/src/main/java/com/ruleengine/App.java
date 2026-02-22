@@ -11,6 +11,11 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * CLI entry point for the rule engine.
+ *
+ * <p>Usage: {@code rule-engine <rules.json> <urls.txt> [--aho-corasick]}
+ */
 public class App {
 
     public static void main(String[] args) {
