@@ -119,7 +119,15 @@ public final class RuleIndex {
      */
     public Set<ConditionRef> queryCandidates(ParsedUrl url) {
         Set<ConditionRef> candidates = new HashSet<>();
-        for (UrlPart part : UrlPart.values()) {
+        UrlPart[] parts = UrlPart.values();
+
+        // Pre-compute reversed values once for all ENDS_WITH lookups
+        String[] reversed = new String[parts.length];
+        for (UrlPart part : parts) {
+            reversed[part.ordinal()] = new StringBuilder(url.part(part)).reverse().toString();
+        }
+
+        for (UrlPart part : parts) {
             String value = url.part(part);
 
             List<ConditionRef> eqRefs = equalsIndexes.get(part).get(value);
@@ -129,8 +137,7 @@ public final class RuleIndex {
 
             candidates.addAll(startsWithIndexes.get(part).findPrefixesOf(value));
 
-            String reversed = new StringBuilder(value).reverse().toString();
-            candidates.addAll(endsWithIndexes.get(part).findPrefixesOf(reversed));
+            candidates.addAll(endsWithIndexes.get(part).findPrefixesOf(reversed[part.ordinal()]));
 
             if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
                 candidates.addAll(containsAcIndexes.get(part).search(value));
