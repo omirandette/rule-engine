@@ -1,0 +1,3 @@
+https://shop.example.ca/api/sport/index.html?lang=en&sort=date
+https://other.example.org/page/about.html?ref=home
+https://nomatch.zzz/
