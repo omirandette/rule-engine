@@ -10,7 +10,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -28,14 +30,18 @@ class RuleIndexTest {
         return new Condition(part, op, value, true);
     }
 
+    private Set<String> ruleNames(Map<Rule, Set<Condition>> candidates) {
+        return candidates.keySet().stream().map(Rule::name).collect(Collectors.toSet());
+    }
+
     @ParameterizedTest
     @EnumSource(ContainsStrategy.class)
     void equalsMatch(ContainsStrategy strategy) {
         Rule r = rule("eq", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("example.com", "/", "", ""));
-        assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("eq")));
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(new ParsedUrl("example.com", "/", "", ""));
+        assertTrue(ruleNames(candidates).contains("eq"));
     }
 
     @ParameterizedTest
@@ -44,8 +50,8 @@ class RuleIndexTest {
         Rule r = rule("eq", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("other.com", "/", "", ""));
-        assertTrue(refs.isEmpty());
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(new ParsedUrl("other.com", "/", "", ""));
+        assertTrue(candidates.isEmpty());
     }
 
     @ParameterizedTest
@@ -54,8 +60,8 @@ class RuleIndexTest {
         Rule r = rule("sw", cond(UrlPart.PATH, Operator.STARTS_WITH, "/api"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/api/users", "users", ""));
-        assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("sw")));
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(new ParsedUrl("x.com", "/api/users", "users", ""));
+        assertTrue(ruleNames(candidates).contains("sw"));
     }
 
     @ParameterizedTest
@@ -64,8 +70,8 @@ class RuleIndexTest {
         Rule r = rule("ew", cond(UrlPart.HOST, Operator.ENDS_WITH, ".ca"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("shop.example.ca", "/", "", ""));
-        assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("ew")));
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(new ParsedUrl("shop.example.ca", "/", "", ""));
+        assertTrue(ruleNames(candidates).contains("ew"));
     }
 
     @ParameterizedTest
@@ -74,8 +80,8 @@ class RuleIndexTest {
         Rule r = rule("ct", cond(UrlPart.PATH, Operator.CONTAINS, "sport"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/category/sport/items", "items", ""));
-        assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("ct")));
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(new ParsedUrl("x.com", "/category/sport/items", "items", ""));
+        assertTrue(ruleNames(candidates).contains("ct"));
     }
 
     @ParameterizedTest
@@ -84,8 +90,8 @@ class RuleIndexTest {
         Rule r = rule("neg", negCond(UrlPart.PATH, Operator.STARTS_WITH, "/admin"));
         RuleIndex index = new RuleIndex(List.of(r), strategy);
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(new ParsedUrl("x.com", "/admin/panel", "panel", ""));
-        assertTrue(refs.isEmpty());
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(new ParsedUrl("x.com", "/admin/panel", "panel", ""));
+        assertTrue(candidates.isEmpty());
     }
 
     @Test
@@ -95,14 +101,10 @@ class RuleIndexTest {
         Rule r3 = rule("r3", cond(UrlPart.HOST, Operator.ENDS_WITH, ".com"));
         RuleIndex index = new RuleIndex(List.of(r1, r2, r3));
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(
                 new ParsedUrl("example.com", "/sport", "sport", ""));
 
-        Set<String> ruleNames = new java.util.HashSet<>();
-        for (RuleIndex.ConditionRef cr : refs) {
-            ruleNames.add(cr.rule().name());
-        }
-        assertTrue(ruleNames.containsAll(Set.of("r1", "r2", "r3")));
+        assertTrue(ruleNames(candidates).containsAll(Set.of("r1", "r2", "r3")));
     }
 
     @Test
@@ -110,8 +112,8 @@ class RuleIndexTest {
         Rule r = rule("qp", cond(UrlPart.QUERY, Operator.CONTAINS, "lang=en"));
         RuleIndex index = new RuleIndex(List.of(r));
 
-        Set<RuleIndex.ConditionRef> refs = index.queryCandidates(
+        Map<Rule, Set<Condition>> candidates = index.queryCandidates(
                 new ParsedUrl("x.com", "/", "", "q=hello&lang=en"));
-        assertTrue(refs.stream().anyMatch(cr -> cr.rule().name().equals("qp")));
+        assertTrue(ruleNames(candidates).contains("qp"));
     }
 }
