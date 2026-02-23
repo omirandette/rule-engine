@@ -266,11 +266,13 @@ public final class AhoCorasick<V> {
         }
         int state = 0;
         for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            state = nextState(state, c);
-            List<V> out = output[state];
-            if (out != null && !out.isEmpty()) {
-                for (V v : out) {
+            state = nextState(state, text.charAt(i));
+            // output[] is never null (every state gets an empty list in allocateState);
+            // the isEmpty() guard avoids for-each overhead on the majority of states
+            // that have no pattern endings.
+            List<V> matches = output[state];
+            if (!matches.isEmpty()) {
+                for (V v : matches) {
                     consumer.accept(v);
                 }
             }
