@@ -111,18 +111,37 @@ public final class Trie<V> {
     }
 
     private final class Node {
-        Map<Character, Node> children;
+        private static final int ASCII_SIZE = 128;
+
+        Object[] ascii;
+        Map<Character, Node> extended;
         List<V> values;
 
+        @SuppressWarnings("unchecked")
         Node child(char c) {
-            return children == null ? null : children.get(c);
+            if (c < ASCII_SIZE) {
+                return ascii == null ? null : (Node) ascii[c];
+            }
+            return extended == null ? null : extended.get(c);
         }
 
+        @SuppressWarnings("unchecked")
         Node childOrCreate(char c) {
-            if (children == null) {
-                children = new HashMap<>(4);
+            if (c < ASCII_SIZE) {
+                if (ascii == null) {
+                    ascii = new Object[ASCII_SIZE];
+                }
+                Node node = (Node) ascii[c];
+                if (node == null) {
+                    node = new Node();
+                    ascii[c] = node;
+                }
+                return node;
             }
-            return children.computeIfAbsent(c, _ -> new Node());
+            if (extended == null) {
+                extended = new HashMap<>(4);
+            }
+            return extended.computeIfAbsent(c, _ -> new Node());
         }
     }
 }
