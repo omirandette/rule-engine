@@ -64,6 +64,7 @@ public final class Trie<V> {
      * @param consumer called for each matching value
      */
     public void findPrefixesOf(String input, Consumer<V> consumer) {
+        // Empty-key values match every input (a zero-length string is a prefix of all strings)
         for (V v : emptyKeyValues) {
             consumer.accept(v);
         }
@@ -71,9 +72,11 @@ public final class Trie<V> {
         for (int i = 0; i < input.length(); i++) {
             current = current.child(input.charAt(i));
             if (current == null) {
-                break;
+                return; // no trie path continues past this character
             }
             if (current.values != null) {
+                // This node marks the end of one or more inserted keys,
+                // meaning input[0..i] is a stored prefix that matches.
                 for (V v : current.values) {
                     consumer.accept(v);
                 }
