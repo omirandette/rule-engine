@@ -9,14 +9,9 @@ import java.util.function.Consumer;
 /**
  * A character-based trie that maps string keys to lists of values.
  *
- * <p>Supports three query modes:
- * <ul>
- *   <li>{@link #findPrefixesOf(String)} — returns values for all keys that are prefixes of the input
- *       (used for {@code STARTS_WITH} matching). Walks the trie character by character with no
- *       substring allocations.</li>
- *   <li>{@link #findSubstringsOf(String)} — returns values for all keys that appear as substrings
- *       of the input (used for {@code CONTAINS} matching via the TRIE strategy)</li>
- * </ul>
+ * <p>Supports prefix queries via {@link #findPrefixesOf(String)}, which returns values for all
+ * keys that are prefixes of the input (used for {@code STARTS_WITH} matching). Walks the trie
+ * character by character with no substring allocations.
  *
  * <p>Also used for {@code ENDS_WITH} matching by inserting and querying reversed strings.
  *
@@ -95,45 +90,6 @@ public final class Trie<V> {
     public List<V> findPrefixesOf(String input) {
         List<V> result = new ArrayList<>();
         findPrefixesOf(input, result::add);
-        return result;
-    }
-
-    /**
-     * Invokes the consumer for each value whose key appears as a substring
-     * of the input.
-     *
-     * @param input    the string to search for substrings in
-     * @param consumer called for each matching value
-     */
-    public void findSubstringsOf(String input, Consumer<V> consumer) {
-        for (V v : emptyKeyValues) {
-            consumer.accept(v);
-        }
-        for (int start = 0; start < input.length(); start++) {
-            Node current = root;
-            for (int i = start; i < input.length(); i++) {
-                current = current.child(input.charAt(i));
-                if (current == null) {
-                    break;
-                }
-                if (current.values != null) {
-                    for (V v : current.values) {
-                        consumer.accept(v);
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Returns all values whose keys appear as substrings of the given input.
-     *
-     * @param input the string to search for substrings in
-     * @return list of values whose keys are substrings of {@code input}
-     */
-    public List<V> findSubstringsOf(String input) {
-        List<V> result = new ArrayList<>();
-        findSubstringsOf(input, result::add);
         return result;
     }
 

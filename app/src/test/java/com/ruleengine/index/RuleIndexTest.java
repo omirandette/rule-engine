@@ -6,11 +6,8 @@ import com.ruleengine.rule.Rule;
 import com.ruleengine.url.ParsedUrl;
 import com.ruleengine.url.UrlPart;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -28,61 +25,55 @@ class RuleIndexTest {
         return new Condition(part, op, value, true);
     }
 
-    @ParameterizedTest
-    @EnumSource(ContainsStrategy.class)
-    void equalsMatch(ContainsStrategy strategy) {
+    @Test
+    void equalsMatch() {
         Rule r = rule("eq", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
-        RuleIndex index = new RuleIndex(List.of(r), strategy);
+        RuleIndex index = new RuleIndex(List.of(r));
 
         CandidateResult candidates = index.queryCandidates(new ParsedUrl("example.com", "/", "", ""));
         assertTrue(candidates.isCandidate(index.ruleId(r)));
     }
 
-    @ParameterizedTest
-    @EnumSource(ContainsStrategy.class)
-    void equalsNoMatch(ContainsStrategy strategy) {
+    @Test
+    void equalsNoMatch() {
         Rule r = rule("eq", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
-        RuleIndex index = new RuleIndex(List.of(r), strategy);
+        RuleIndex index = new RuleIndex(List.of(r));
 
         CandidateResult candidates = index.queryCandidates(new ParsedUrl("other.com", "/", "", ""));
         assertFalse(candidates.isCandidate(index.ruleId(r)));
     }
 
-    @ParameterizedTest
-    @EnumSource(ContainsStrategy.class)
-    void startsWithMatch(ContainsStrategy strategy) {
+    @Test
+    void startsWithMatch() {
         Rule r = rule("sw", cond(UrlPart.PATH, Operator.STARTS_WITH, "/api"));
-        RuleIndex index = new RuleIndex(List.of(r), strategy);
+        RuleIndex index = new RuleIndex(List.of(r));
 
         CandidateResult candidates = index.queryCandidates(new ParsedUrl("x.com", "/api/users", "users", ""));
         assertTrue(candidates.isCandidate(index.ruleId(r)));
     }
 
-    @ParameterizedTest
-    @EnumSource(ContainsStrategy.class)
-    void endsWithMatch(ContainsStrategy strategy) {
+    @Test
+    void endsWithMatch() {
         Rule r = rule("ew", cond(UrlPart.HOST, Operator.ENDS_WITH, ".ca"));
-        RuleIndex index = new RuleIndex(List.of(r), strategy);
+        RuleIndex index = new RuleIndex(List.of(r));
 
         CandidateResult candidates = index.queryCandidates(new ParsedUrl("shop.example.ca", "/", "", ""));
         assertTrue(candidates.isCandidate(index.ruleId(r)));
     }
 
-    @ParameterizedTest
-    @EnumSource(ContainsStrategy.class)
-    void containsMatch(ContainsStrategy strategy) {
+    @Test
+    void containsMatch() {
         Rule r = rule("ct", cond(UrlPart.PATH, Operator.CONTAINS, "sport"));
-        RuleIndex index = new RuleIndex(List.of(r), strategy);
+        RuleIndex index = new RuleIndex(List.of(r));
 
         CandidateResult candidates = index.queryCandidates(new ParsedUrl("x.com", "/category/sport/items", "items", ""));
         assertTrue(candidates.isCandidate(index.ruleId(r)));
     }
 
-    @ParameterizedTest
-    @EnumSource(ContainsStrategy.class)
-    void negatedConditionsNotIndexed(ContainsStrategy strategy) {
+    @Test
+    void negatedConditionsNotIndexed() {
         Rule r = rule("neg", negCond(UrlPart.PATH, Operator.STARTS_WITH, "/admin"));
-        RuleIndex index = new RuleIndex(List.of(r), strategy);
+        RuleIndex index = new RuleIndex(List.of(r));
 
         CandidateResult candidates = index.queryCandidates(new ParsedUrl("x.com", "/admin/panel", "panel", ""));
         assertFalse(candidates.isCandidate(index.ruleId(r)));

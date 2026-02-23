@@ -45,47 +45,6 @@ class TrieTest {
     }
 
     @Test
-    void findSubstringsOfFindsMiddleMatch() {
-        Trie<String> trie = new Trie<>();
-        trie.insert("sport", "match");
-        List<String> result = trie.findSubstringsOf("/category/sport/items");
-        assertTrue(result.contains("match"));
-    }
-
-    @Test
-    void findSubstringsOfFindsMultipleSubstrings() {
-        Trie<String> trie = new Trie<>();
-        trie.insert("ab", "v1");
-        trie.insert("cd", "v2");
-        List<String> result = trie.findSubstringsOf("abcd");
-        assertTrue(result.containsAll(List.of("v1", "v2")));
-    }
-
-    @Test
-    void findSubstringsOfAtStart() {
-        Trie<String> trie = new Trie<>();
-        trie.insert("hello", "val");
-        List<String> result = trie.findSubstringsOf("helloworld");
-        assertTrue(result.contains("val"));
-    }
-
-    @Test
-    void findSubstringsOfAtEnd() {
-        Trie<String> trie = new Trie<>();
-        trie.insert("world", "val");
-        List<String> result = trie.findSubstringsOf("helloworld");
-        assertTrue(result.contains("val"));
-    }
-
-    @Test
-    void findSubstringsOfNoMatch() {
-        Trie<String> trie = new Trie<>();
-        trie.insert("xyz", "val");
-        List<String> result = trie.findSubstringsOf("abc");
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
     void multipleValuesForSameKey() {
         Trie<String> trie = new Trie<>();
         trie.insert("key", "v1");
