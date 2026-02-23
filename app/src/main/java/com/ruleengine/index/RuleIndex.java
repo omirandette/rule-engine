@@ -28,12 +28,12 @@ import java.util.Map;
 public final class RuleIndex {
 
     /**
-     * A reference linking a condition back to its parent rule.
+     * A reference linking a condition back to its parent rule by dense ID.
      *
-     * @param rule      the rule containing this condition
+     * @param ruleId    the dense rule ID (0..N-1)
      * @param condition the specific condition that matched
      */
-    public record ConditionRef(Rule rule, Condition condition) {}
+    public record ConditionRef(int ruleId, Condition condition) {}
 
     private final Map<UrlPart, Map<String, List<ConditionRef>>> equalsIndexes;
     private final Map<UrlPart, Trie<ConditionRef>> startsWithIndexes;
@@ -78,11 +78,12 @@ public final class RuleIndex {
         }
 
         for (Rule rule : rules) {
+            int id = ruleIds.get(rule);
             for (Condition cond : rule.conditions()) {
                 if (cond.negated()) {
                     continue;
                 }
-                ConditionRef ref = new ConditionRef(rule, cond);
+                ConditionRef ref = new ConditionRef(id, cond);
                 switch (cond.operator()) {
                     case EQUALS -> equalsIndexes.get(cond.part())
                             .computeIfAbsent(cond.value(), _ -> new ArrayList<>())
@@ -181,7 +182,7 @@ public final class RuleIndex {
 
     private void addAll(CandidateResult candidates, List<ConditionRef> refs) {
         for (ConditionRef ref : refs) {
-            candidates.add(ruleIds.get(ref.rule()), ref.condition());
+            candidates.add(ref.ruleId(), ref.condition());
         }
     }
 }

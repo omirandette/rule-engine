@@ -11,7 +11,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Evaluates a parsed URL against a set of rules and returns the result
@@ -25,7 +24,8 @@ public final class RuleEngine {
 
     private final List<Rule> sortedRules;
     private final RuleIndex index;
-    private final Set<Rule> allNegatedRules;
+    private final int[] sortedRuleIds;
+    private final boolean[] isAllNegated;
 
     /**
      * Creates an engine with the specified contains strategy.
@@ -36,9 +36,15 @@ public final class RuleEngine {
     public RuleEngine(List<Rule> rules, ContainsStrategy containsStrategy) {
         this.sortedRules = rules.stream().sorted().toList();
         this.index = new RuleIndex(rules, containsStrategy);
-        this.allNegatedRules = sortedRules.stream()
-                .filter(r -> r.conditions().stream().allMatch(Condition::negated))
-                .collect(Collectors.toUnmodifiableSet());
+        this.sortedRuleIds = new int[sortedRules.size()];
+        this.isAllNegated = new boolean[index.ruleCount()];
+        for (int i = 0; i < sortedRules.size(); i++) {
+            Rule r = sortedRules.get(i);
+            sortedRuleIds[i] = index.ruleId(r);
+            if (r.conditions().stream().allMatch(Condition::negated)) {
+                isAllNegated[sortedRuleIds[i]] = true;
+            }
+        }
     }
 
     /**
@@ -60,11 +66,12 @@ public final class RuleEngine {
     public Optional<String> evaluate(ParsedUrl url) {
         CandidateResult candidates = index.queryCandidates(url);
 
-        for (Rule rule : sortedRules) {
-            int ruleId = index.ruleId(rule);
-            if (!candidates.isCandidate(ruleId) && !allNegatedRules.contains(rule)) {
+        for (int i = 0; i < sortedRules.size(); i++) {
+            int ruleId = sortedRuleIds[i];
+            if (!candidates.isCandidate(ruleId) && !isAllNegated[ruleId]) {
                 continue;
             }
+            Rule rule = sortedRules.get(i);
             Set<Condition> satisfied = candidates.conditions(ruleId);
             if (allConditionsMet(rule, url, satisfied != null ? satisfied : Collections.emptySet())) {
                 return Optional.of(rule.result());
