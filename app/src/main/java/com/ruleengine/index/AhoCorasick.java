@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.ahocorasick.trie.Emit;
 
@@ -59,6 +60,31 @@ public final class AhoCorasick<V> {
     }
 
     /**
+     * Searches the text and invokes the consumer for each matching value.
+     *
+     * @param text     the text to search
+     * @param consumer called for each matching value
+     * @throws IllegalStateException if {@link #build()} has not been called
+     */
+    public void search(String text, Consumer<V> consumer) {
+        if (!built) {
+            throw new IllegalStateException("Must call build() before search()");
+        }
+        for (V v : emptyPatternValues) {
+            consumer.accept(v);
+        }
+        Collection<Emit> emits = trie.parseText(text);
+        for (Emit emit : emits) {
+            List<V> values = valueMap.get(emit.getKeyword());
+            if (values != null) {
+                for (V v : values) {
+                    consumer.accept(v);
+                }
+            }
+        }
+    }
+
+    /**
      * Searches the text for all inserted patterns and returns their associated values.
      *
      * @param text the text to search
@@ -66,17 +92,8 @@ public final class AhoCorasick<V> {
      * @throws IllegalStateException if {@link #build()} has not been called
      */
     public List<V> search(String text) {
-        if (!built) {
-            throw new IllegalStateException("Must call build() before search()");
-        }
-        List<V> result = new ArrayList<>(emptyPatternValues);
-        Collection<Emit> emits = trie.parseText(text);
-        for (Emit emit : emits) {
-            List<V> values = valueMap.get(emit.getKeyword());
-            if (values != null) {
-                result.addAll(values);
-            }
-        }
+        List<V> result = new ArrayList<>();
+        search(text, result::add);
         return result;
     }
 }

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * A character-based trie that maps string keys to lists of values.
@@ -60,17 +61,17 @@ public final class Trie<V> {
     }
 
     /**
-     * Returns all values whose keys are prefixes of the given input.
+     * Invokes the consumer for each value whose key is a prefix of the input.
      *
-     * <p>Walks the trie character by character with no substring allocations.
-     * For example, if {@code "ab"} and {@code "abc"} are inserted,
-     * {@code findPrefixesOf("abcd")} returns values for both.
+     * <p>Walks the trie character by character with no allocations.
      *
-     * @param input the string to match prefixes against
-     * @return list of values whose keys are prefixes of {@code input}
+     * @param input    the string to match prefixes against
+     * @param consumer called for each matching value
      */
-    public List<V> findPrefixesOf(String input) {
-        List<V> result = new ArrayList<>(emptyKeyValues);
+    public void findPrefixesOf(String input, Consumer<V> consumer) {
+        for (V v : emptyKeyValues) {
+            consumer.accept(v);
+        }
         Node current = root;
         for (int i = 0; i < input.length(); i++) {
             current = current.child(input.charAt(i));
@@ -78,23 +79,36 @@ public final class Trie<V> {
                 break;
             }
             if (current.values != null) {
-                result.addAll(current.values);
+                for (V v : current.values) {
+                    consumer.accept(v);
+                }
             }
         }
+    }
+
+    /**
+     * Returns all values whose keys are prefixes of the given input.
+     *
+     * @param input the string to match prefixes against
+     * @return list of values whose keys are prefixes of {@code input}
+     */
+    public List<V> findPrefixesOf(String input) {
+        List<V> result = new ArrayList<>();
+        findPrefixesOf(input, result::add);
         return result;
     }
 
     /**
-     * Returns all values whose keys appear as substrings of the given input.
+     * Invokes the consumer for each value whose key appears as a substring
+     * of the input.
      *
-     * <p>For each starting position, walks the trie character by character
-     * collecting matches. No substring allocations are performed.
-     *
-     * @param input the string to search for substrings in
-     * @return list of values whose keys are substrings of {@code input}
+     * @param input    the string to search for substrings in
+     * @param consumer called for each matching value
      */
-    public List<V> findSubstringsOf(String input) {
-        List<V> result = new ArrayList<>(emptyKeyValues);
+    public void findSubstringsOf(String input, Consumer<V> consumer) {
+        for (V v : emptyKeyValues) {
+            consumer.accept(v);
+        }
         for (int start = 0; start < input.length(); start++) {
             Node current = root;
             for (int i = start; i < input.length(); i++) {
@@ -103,10 +117,23 @@ public final class Trie<V> {
                     break;
                 }
                 if (current.values != null) {
-                    result.addAll(current.values);
+                    for (V v : current.values) {
+                        consumer.accept(v);
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Returns all values whose keys appear as substrings of the given input.
+     *
+     * @param input the string to search for substrings in
+     * @return list of values whose keys are substrings of {@code input}
+     */
+    public List<V> findSubstringsOf(String input) {
+        List<V> result = new ArrayList<>();
+        findSubstringsOf(input, result::add);
         return result;
     }
 

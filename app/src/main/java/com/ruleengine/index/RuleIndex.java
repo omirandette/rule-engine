@@ -10,6 +10,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Indexes non-negated rule conditions by (UrlPart, Operator) for fast lookup.
@@ -157,6 +158,7 @@ public final class RuleIndex {
      */
     public CandidateResult queryCandidates(ParsedUrl url) {
         CandidateResult candidates = new CandidateResult(ruleCount, nonNegatedCounts);
+        Consumer<ConditionRef> consumer = ref -> candidates.increment(ref.ruleId());
         UrlPart[] parts = UrlPart.values();
 
         // Pre-compute reversed values only for parts that have ENDS_WITH rules
@@ -172,27 +174,23 @@ public final class RuleIndex {
 
             List<ConditionRef> eqRefs = equalsIndexes.get(part).get(value);
             if (eqRefs != null) {
-                addAll(candidates, eqRefs);
+                for (ConditionRef ref : eqRefs) {
+                    consumer.accept(ref);
+                }
             }
 
-            addAll(candidates, startsWithIndexes.get(part).findPrefixesOf(value));
+            startsWithIndexes.get(part).findPrefixesOf(value, consumer);
 
             if (reversed[part.ordinal()] != null) {
-                addAll(candidates, endsWithIndexes.get(part).findPrefixesOf(reversed[part.ordinal()]));
+                endsWithIndexes.get(part).findPrefixesOf(reversed[part.ordinal()], consumer);
             }
 
             if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
-                addAll(candidates, containsAcIndexes.get(part).search(value));
+                containsAcIndexes.get(part).search(value, consumer);
             } else {
-                addAll(candidates, containsTrieIndexes.get(part).findSubstringsOf(value));
+                containsTrieIndexes.get(part).findSubstringsOf(value, consumer);
             }
         }
         return candidates;
-    }
-
-    private void addAll(CandidateResult candidates, List<ConditionRef> refs) {
-        for (ConditionRef ref : refs) {
-            candidates.increment(ref.ruleId());
-        }
     }
 }
