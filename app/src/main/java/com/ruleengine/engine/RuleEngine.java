@@ -1,5 +1,6 @@
 package com.ruleengine.engine;
 
+import com.ruleengine.index.CandidateResult;
 import com.ruleengine.index.ContainsStrategy;
 import com.ruleengine.index.RuleIndex;
 import com.ruleengine.rule.Condition;
@@ -8,7 +9,6 @@ import com.ruleengine.url.ParsedUrl;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -58,13 +58,15 @@ public final class RuleEngine {
      * @return the result string of the matching rule, or {@link Optional#empty()}
      */
     public Optional<String> evaluate(ParsedUrl url) {
-        Map<Rule, Set<Condition>> candidates = index.queryCandidates(url);
+        CandidateResult candidates = index.queryCandidates(url);
 
         for (Rule rule : sortedRules) {
-            if (!candidates.containsKey(rule) && !allNegatedRules.contains(rule)) {
+            int ruleId = index.ruleId(rule);
+            if (!candidates.isCandidate(ruleId) && !allNegatedRules.contains(rule)) {
                 continue;
             }
-            if (allConditionsMet(rule, url, candidates.getOrDefault(rule, Collections.emptySet()))) {
+            Set<Condition> satisfied = candidates.conditions(ruleId);
+            if (allConditionsMet(rule, url, satisfied != null ? satisfied : Collections.emptySet())) {
                 return Optional.of(rule.result());
             }
         }

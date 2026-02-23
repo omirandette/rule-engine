@@ -9,10 +9,8 @@ import com.ruleengine.url.UrlPart;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Indexes non-negated rule conditions by (UrlPart, Operator) for fast lookup.
@@ -45,6 +43,9 @@ public final class RuleIndex {
     private final Map<UrlPart, Trie<ConditionRef>> containsTrieIndexes;
     private final Map<UrlPart, AhoCorasick<ConditionRef>> containsAcIndexes;
 
+    private final Map<Rule, Integer> ruleIds;
+    private final int ruleCount;
+
     /**
      * Builds the index from a list of rules using the specified contains strategy.
      *
@@ -58,6 +59,12 @@ public final class RuleIndex {
         this.endsWithIndexes = new EnumMap<>(UrlPart.class);
         this.containsTrieIndexes = new EnumMap<>(UrlPart.class);
         this.containsAcIndexes = new EnumMap<>(UrlPart.class);
+
+        this.ruleIds = new HashMap<>(rules.size() * 2);
+        for (int i = 0; i < rules.size(); i++) {
+            ruleIds.put(rules.get(i), i);
+        }
+        this.ruleCount = rules.size();
 
         for (UrlPart part : UrlPart.values()) {
             equalsIndexes.put(part, new HashMap<>());
@@ -112,14 +119,33 @@ public final class RuleIndex {
     }
 
     /**
+     * Returns the dense integer ID assigned to the given rule.
+     *
+     * @param rule the rule to look up
+     * @return the rule's dense ID (0..N-1)
+     */
+    public int ruleId(Rule rule) {
+        return ruleIds.get(rule);
+    }
+
+    /**
+     * Returns the total number of indexed rules.
+     *
+     * @return the rule count
+     */
+    public int ruleCount() {
+        return ruleCount;
+    }
+
+    /**
      * Queries the index for all non-negated conditions that match the given URL,
-     * grouped by rule.
+     * grouped by rule in a dense array.
      *
      * @param url the parsed URL to match against
-     * @return map from each candidate rule to its set of satisfied conditions
+     * @return a {@link CandidateResult} with satisfied conditions per rule ID
      */
-    public Map<Rule, Set<Condition>> queryCandidates(ParsedUrl url) {
-        Map<Rule, Set<Condition>> candidates = new HashMap<>();
+    public CandidateResult queryCandidates(ParsedUrl url) {
+        CandidateResult candidates = new CandidateResult(ruleCount);
         UrlPart[] parts = UrlPart.values();
 
         // Pre-compute reversed values only for parts that have ENDS_WITH rules
@@ -153,9 +179,9 @@ public final class RuleIndex {
         return candidates;
     }
 
-    private void addAll(Map<Rule, Set<Condition>> candidates, List<ConditionRef> refs) {
+    private void addAll(CandidateResult candidates, List<ConditionRef> refs) {
         for (ConditionRef ref : refs) {
-            candidates.computeIfAbsent(ref.rule(), _ -> new HashSet<>()).add(ref.condition());
+            candidates.add(ruleIds.get(ref.rule()), ref.condition());
         }
     }
 }
