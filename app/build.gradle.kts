@@ -25,8 +25,6 @@ dependencies {
     // This dependency is used by the application.
     implementation(libs.guava)
     implementation(libs.gson)
-    implementation(libs.commons.collections4)
-    implementation(libs.ahocorasick)
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
