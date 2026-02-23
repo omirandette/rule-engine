@@ -1,57 +1,48 @@
 package com.ruleengine.index;
 
-import com.ruleengine.rule.Condition;
-
-import java.util.HashSet;
-import java.util.Set;
-
 /**
- * Dense array-based container for candidate rule conditions.
+ * Dense array-based container tracking how many non-negated conditions
+ * are satisfied per rule.
  *
- * <p>Indexed by rule ID (0..N-1), each slot holds the set of non-negated
- * conditions satisfied for that rule. A {@code null} slot means the rule
- * is not a candidate. This replaces {@code Map<Rule, Set<Condition>>}
- * to eliminate HashMap overhead on the hot path.
+ * <p>Each non-negated condition maps to exactly one index entry and produces
+ * at most one match per URL, so a simple counter is equivalent to set membership.
+ * A rule's non-negated conditions are fully met when
+ * {@code satisfiedCounts[ruleId] == nonNegatedCounts[ruleId]}.
  */
 public final class CandidateResult {
 
-    @SuppressWarnings("unchecked")
-    private final Set<Condition>[] satisfied;
+    private final int[] satisfiedCounts;
+    private final int[] nonNegatedCounts;
 
     /**
      * Creates a result container sized for the given number of rules.
      *
-     * @param ruleCount total number of rules (determines array size)
+     * @param ruleCount        total number of rules (determines array size)
+     * @param nonNegatedCounts shared reference to expected counts per rule
      */
-    @SuppressWarnings("unchecked")
-    public CandidateResult(int ruleCount) {
-        this.satisfied = new Set[ruleCount];
+    public CandidateResult(int ruleCount, int[] nonNegatedCounts) {
+        this.satisfiedCounts = new int[ruleCount];
+        this.nonNegatedCounts = nonNegatedCounts;
     }
 
     /**
-     * Records a satisfied condition for the rule at the given ID.
-     *
-     * @param ruleId    the dense rule ID
-     * @param condition the condition that was satisfied
-     */
-    public void add(int ruleId, Condition condition) {
-        Set<Condition> set = satisfied[ruleId];
-        if (set == null) {
-            set = new HashSet<>();
-            satisfied[ruleId] = set;
-        }
-        set.add(condition);
-    }
-
-    /**
-     * Returns the set of satisfied conditions for the given rule ID,
-     * or {@code null} if the rule is not a candidate.
+     * Increments the satisfied count for the rule at the given ID.
      *
      * @param ruleId the dense rule ID
-     * @return the satisfied conditions, or {@code null}
      */
-    public Set<Condition> conditions(int ruleId) {
-        return satisfied[ruleId];
+    public void increment(int ruleId) {
+        satisfiedCounts[ruleId]++;
+    }
+
+    /**
+     * Returns {@code true} if all non-negated conditions for the given rule
+     * have been satisfied.
+     *
+     * @param ruleId the dense rule ID
+     * @return {@code true} if the satisfied count equals the expected count
+     */
+    public boolean allSatisfied(int ruleId) {
+        return satisfiedCounts[ruleId] == nonNegatedCounts[ruleId];
     }
 
     /**
@@ -62,6 +53,6 @@ public final class CandidateResult {
      * @return {@code true} if the rule is a candidate
      */
     public boolean isCandidate(int ruleId) {
-        return satisfied[ruleId] != null;
+        return satisfiedCounts[ruleId] > 0;
     }
 }

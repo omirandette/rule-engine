@@ -1,7 +1,6 @@
 package com.ruleengine.index;
 
 import com.ruleengine.rule.Condition;
-import com.ruleengine.rule.Operator;
 import com.ruleengine.rule.Rule;
 import com.ruleengine.url.ParsedUrl;
 import com.ruleengine.url.UrlPart;
@@ -28,12 +27,11 @@ import java.util.Map;
 public final class RuleIndex {
 
     /**
-     * A reference linking a condition back to its parent rule by dense ID.
+     * A reference linking a match back to its parent rule by dense ID.
      *
-     * @param ruleId    the dense rule ID (0..N-1)
-     * @param condition the specific condition that matched
+     * @param ruleId the dense rule ID (0..N-1)
      */
-    public record ConditionRef(int ruleId, Condition condition) {}
+    public record ConditionRef(int ruleId) {}
 
     private final Map<UrlPart, Map<String, List<ConditionRef>>> equalsIndexes;
     private final Map<UrlPart, Trie<ConditionRef>> startsWithIndexes;
@@ -45,6 +43,7 @@ public final class RuleIndex {
 
     private final Map<Rule, Integer> ruleIds;
     private final int ruleCount;
+    private final int[] nonNegatedCounts;
 
     /**
      * Builds the index from a list of rules using the specified contains strategy.
@@ -65,6 +64,7 @@ public final class RuleIndex {
             ruleIds.put(rules.get(i), i);
         }
         this.ruleCount = rules.size();
+        this.nonNegatedCounts = new int[ruleCount];
 
         for (UrlPart part : UrlPart.values()) {
             equalsIndexes.put(part, new HashMap<>());
@@ -83,7 +83,8 @@ public final class RuleIndex {
                 if (cond.negated()) {
                     continue;
                 }
-                ConditionRef ref = new ConditionRef(id, cond);
+                nonNegatedCounts[id]++;
+                ConditionRef ref = new ConditionRef(id);
                 switch (cond.operator()) {
                     case EQUALS -> equalsIndexes.get(cond.part())
                             .computeIfAbsent(cond.value(), _ -> new ArrayList<>())
@@ -139,6 +140,15 @@ public final class RuleIndex {
     }
 
     /**
+     * Returns the expected count of non-negated conditions per rule.
+     *
+     * @return the non-negated counts array (indexed by rule ID)
+     */
+    public int[] nonNegatedCounts() {
+        return nonNegatedCounts;
+    }
+
+    /**
      * Queries the index for all non-negated conditions that match the given URL,
      * grouped by rule in a dense array.
      *
@@ -146,7 +156,7 @@ public final class RuleIndex {
      * @return a {@link CandidateResult} with satisfied conditions per rule ID
      */
     public CandidateResult queryCandidates(ParsedUrl url) {
-        CandidateResult candidates = new CandidateResult(ruleCount);
+        CandidateResult candidates = new CandidateResult(ruleCount, nonNegatedCounts);
         UrlPart[] parts = UrlPart.values();
 
         // Pre-compute reversed values only for parts that have ENDS_WITH rules
@@ -182,7 +192,7 @@ public final class RuleIndex {
 
     private void addAll(CandidateResult candidates, List<ConditionRef> refs) {
         for (ConditionRef ref : refs) {
-            candidates.add(ref.ruleId(), ref.condition());
+            candidates.increment(ref.ruleId());
         }
     }
 }

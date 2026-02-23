@@ -7,10 +7,8 @@ import com.ruleengine.rule.Condition;
 import com.ruleengine.rule.Rule;
 import com.ruleengine.url.ParsedUrl;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Evaluates a parsed URL against a set of rules and returns the result
@@ -72,24 +70,17 @@ public final class RuleEngine {
                 continue;
             }
             Rule rule = sortedRules.get(i);
-            Set<Condition> satisfied = candidates.conditions(ruleId);
-            if (allConditionsMet(rule, url, satisfied != null ? satisfied : Collections.emptySet())) {
+            if (candidates.allSatisfied(ruleId) && allNegatedConditionsMet(rule, url)) {
                 return Optional.of(rule.result());
             }
         }
         return Optional.empty();
     }
 
-    private boolean allConditionsMet(Rule rule, ParsedUrl url, Set<Condition> satisfied) {
+    private boolean allNegatedConditionsMet(Rule rule, ParsedUrl url) {
         for (Condition cond : rule.conditions()) {
-            if (cond.negated()) {
-                if (matchesDirect(cond, url)) {
-                    return false;
-                }
-            } else {
-                if (!satisfied.contains(cond)) {
-                    return false;
-                }
+            if (cond.negated() && matchesDirect(cond, url)) {
+                return false;
             }
         }
         return true;
