@@ -88,3 +88,32 @@ tasks.named("build") {
     dependsOn("javadoc")
     dependsOn(tasks.jacocoTestCoverageVerification)
 }
+
+tasks.register<JavaExec>("benchmark") {
+    description = "Run the rule engine throughput benchmark"
+    group = "verification"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.ruleengine.benchmark.BenchmarkRunner"
+    jvmArgs("-XX:+UseG1GC", "-Xms512m", "-Xmx512m")
+    if (project.hasProperty("profile")) {
+        jvmArgs("-XX:StartFlightRecording=filename=${project.layout.buildDirectory.get()}/benchmark.jfr,settings=profile")
+    }
+    workingDir = project.projectDir
+}
+
+tasks.register<JavaExec>("profileBenchmark") {
+    description = "Run the benchmark with async-profiler (collapsed stacks + flame graph)"
+    group = "verification"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.ruleengine.benchmark.BenchmarkRunner"
+    val apLib = providers.gradleProperty("asyncProfilerLib")
+    val outputDir = layout.buildDirectory.dir("benchmark")
+    val event = providers.gradleProperty("profileEvent").orElse("cpu")
+    jvmArgs(
+        "-XX:+UseG1GC", "-Xms512m", "-Xmx512m",
+        "-agentpath:${apLib.get()}=start,event=${event.get()},file=${outputDir.get()}/profile.collapsed,collapsed",
+    )
+    workingDir = project.projectDir
+    dependsOn("testClasses")
+    doFirst { outputDir.get().asFile.mkdirs() }
+}
