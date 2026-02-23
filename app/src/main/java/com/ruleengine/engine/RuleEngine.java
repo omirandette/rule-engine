@@ -19,10 +19,11 @@ import java.util.Optional;
  */
 public final class RuleEngine {
 
-    private final List<Rule> sortedRules;
+    /** Bundles a rule with its precomputed index ID and negation flag. */
+    private record SortedEntry(Rule rule, int ruleId, boolean allNegated) {}
+
+    private final SortedEntry[] entries;
     private final RuleIndex index;
-    private final int[] sortedRuleIds;
-    private final boolean[] isAllNegated;
 
     /**
      * Creates an engine that evaluates the given rules.
@@ -30,16 +31,14 @@ public final class RuleEngine {
      * @param rules the rules to evaluate
      */
     public RuleEngine(List<Rule> rules) {
-        this.sortedRules = rules.stream().sorted().toList();
         this.index = new RuleIndex(rules);
-        this.sortedRuleIds = new int[sortedRules.size()];
-        this.isAllNegated = new boolean[index.ruleCount()];
-        for (int i = 0; i < sortedRules.size(); i++) {
-            Rule r = sortedRules.get(i);
-            sortedRuleIds[i] = index.ruleId(r);
-            if (r.conditions().stream().allMatch(Condition::negated)) {
-                isAllNegated[sortedRuleIds[i]] = true;
-            }
+        List<Rule> sorted = rules.stream().sorted().toList();
+        this.entries = new SortedEntry[sorted.size()];
+        for (int i = 0; i < sorted.size(); i++) {
+            Rule rule = sorted.get(i);
+            int ruleId = index.ruleId(rule);
+            boolean allNegated = rule.conditions().stream().allMatch(Condition::negated);
+            entries[i] = new SortedEntry(rule, ruleId, allNegated);
         }
     }
 
@@ -53,14 +52,13 @@ public final class RuleEngine {
     public Optional<String> evaluate(ParsedUrl url) {
         CandidateResult candidates = index.queryCandidates(url);
 
-        for (int i = 0; i < sortedRules.size(); i++) {
-            int ruleId = sortedRuleIds[i];
-            if (!candidates.isCandidate(ruleId) && !isAllNegated[ruleId]) {
+        for (SortedEntry entry : entries) {
+            if (!candidates.isCandidate(entry.ruleId) && !entry.allNegated) {
                 continue;
             }
-            Rule rule = sortedRules.get(i);
-            if (candidates.allSatisfied(ruleId) && noNegatedConditionsMatch(rule, url)) {
-                return Optional.of(rule.result());
+            if (candidates.allSatisfied(entry.ruleId)
+                    && noNegatedConditionsMatch(entry.rule, url)) {
+                return Optional.of(entry.rule.result());
             }
         }
         return Optional.empty();
