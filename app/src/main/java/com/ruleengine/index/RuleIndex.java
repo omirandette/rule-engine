@@ -20,7 +20,7 @@ import java.util.function.Consumer;
  *   <li>{@code EQUALS} — {@link HashMap} for O(1) lookup</li>
  *   <li>{@code STARTS_WITH} — {@link Trie} for prefix matching</li>
  *   <li>{@code ENDS_WITH} — {@link Trie} on reversed strings</li>
- *   <li>{@code CONTAINS} — {@link Trie} or {@link AhoCorasick} (selected via {@link ContainsStrategy})</li>
+ *   <li>{@code CONTAINS} — {@link AhoCorasick} automaton for multi-pattern substring matching</li>
  * </ul>
  *
  * <p>Negated conditions are excluded from the index and must be evaluated directly at match time.
@@ -37,9 +37,6 @@ public final class RuleIndex {
     private final Map<UrlPart, Map<String, List<ConditionRef>>> equalsIndexes;
     private final Map<UrlPart, Trie<ConditionRef>> startsWithIndexes;
     private final Map<UrlPart, Trie<ConditionRef>> endsWithIndexes;
-
-    private final ContainsStrategy containsStrategy;
-    private final Map<UrlPart, Trie<ConditionRef>> containsTrieIndexes;
     private final Map<UrlPart, AhoCorasick<ConditionRef>> containsAcIndexes;
 
     private final Map<Rule, Integer> ruleIds;
@@ -47,17 +44,14 @@ public final class RuleIndex {
     private final int[] nonNegatedCounts;
 
     /**
-     * Builds the index from a list of rules using the specified contains strategy.
+     * Builds the index from a list of rules.
      *
-     * @param rules             the rules to index
-     * @param containsStrategy  the data structure to use for CONTAINS matching
+     * @param rules the rules to index
      */
-    public RuleIndex(List<Rule> rules, ContainsStrategy containsStrategy) {
-        this.containsStrategy = containsStrategy;
+    public RuleIndex(List<Rule> rules) {
         this.equalsIndexes = new EnumMap<>(UrlPart.class);
         this.startsWithIndexes = new EnumMap<>(UrlPart.class);
         this.endsWithIndexes = new EnumMap<>(UrlPart.class);
-        this.containsTrieIndexes = new EnumMap<>(UrlPart.class);
         this.containsAcIndexes = new EnumMap<>(UrlPart.class);
 
         this.ruleIds = new HashMap<>(rules.size() * 2);
@@ -71,11 +65,7 @@ public final class RuleIndex {
             equalsIndexes.put(part, new HashMap<>());
             startsWithIndexes.put(part, new Trie<>());
             endsWithIndexes.put(part, new Trie<>());
-            if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
-                containsAcIndexes.put(part, new AhoCorasick<>());
-            } else {
-                containsTrieIndexes.put(part, new Trie<>());
-            }
+            containsAcIndexes.put(part, new AhoCorasick<>());
         }
 
         for (Rule rule : rules) {
@@ -94,31 +84,15 @@ public final class RuleIndex {
                             .insert(cond.value(), ref);
                     case ENDS_WITH -> endsWithIndexes.get(cond.part())
                             .insert(new StringBuilder(cond.value()).reverse().toString(), ref);
-                    case CONTAINS -> {
-                        if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
-                            containsAcIndexes.get(cond.part()).insert(cond.value(), ref);
-                        } else {
-                            containsTrieIndexes.get(cond.part()).insert(cond.value(), ref);
-                        }
-                    }
+                    case CONTAINS -> containsAcIndexes.get(cond.part())
+                            .insert(cond.value(), ref);
                 }
             }
         }
 
-        if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
-            for (AhoCorasick<ConditionRef> ac : containsAcIndexes.values()) {
-                ac.build();
-            }
+        for (AhoCorasick<ConditionRef> ac : containsAcIndexes.values()) {
+            ac.build();
         }
-    }
-
-    /**
-     * Builds the index using the default {@link ContainsStrategy#TRIE} strategy.
-     *
-     * @param rules the rules to index
-     */
-    public RuleIndex(List<Rule> rules) {
-        this(rules, ContainsStrategy.TRIE);
     }
 
     /**
@@ -185,11 +159,7 @@ public final class RuleIndex {
                 endsWithIndexes.get(part).findPrefixesOf(reversed[part.ordinal()], consumer);
             }
 
-            if (containsStrategy == ContainsStrategy.AHO_CORASICK) {
-                containsAcIndexes.get(part).search(value, consumer);
-            } else {
-                containsTrieIndexes.get(part).findSubstringsOf(value, consumer);
-            }
+            containsAcIndexes.get(part).search(value, consumer);
         }
         return candidates;
     }

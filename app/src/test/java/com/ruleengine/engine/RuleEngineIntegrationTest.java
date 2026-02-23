@@ -1,12 +1,11 @@
 package com.ruleengine.engine;
 
-import com.ruleengine.index.ContainsStrategy;
 import com.ruleengine.rule.Rule;
 import com.ruleengine.rule.RuleLoader;
 import com.ruleengine.url.UrlParser;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.BufferedReader;
@@ -68,11 +67,10 @@ class RuleEngineIntegrationTest {
      * and asserts expected results including priority ordering. Then validates
      * every single-condition rule matches the canonical URL through the pipeline.
      */
-    @ParameterizedTest
-    @EnumSource(ContainsStrategy.class)
-    void batchPipelineProducesExpectedResults(ContainsStrategy strategy) throws IOException {
+    @Test
+    void batchPipelineProducesExpectedResults() throws IOException {
         List<Rule> rules = loadRules();
-        RuleEngine engine = new RuleEngine(rules, strategy);
+        RuleEngine engine = new RuleEngine(rules);
         BatchProcessor processor = new BatchProcessor(engine);
         List<String> urls = loadUrls();
 
@@ -93,7 +91,7 @@ class RuleEngineIntegrationTest {
                 continue;
             }
             BatchProcessor singleProcessor = new BatchProcessor(
-                    new RuleEngine(List.of(rule), strategy));
+                    new RuleEngine(List.of(rule)));
             List<BatchProcessor.UrlResult> singleResult =
                     singleProcessor.processLines(canonicalBatch);
             assertEquals(1, singleResult.size());
@@ -104,7 +102,7 @@ class RuleEngineIntegrationTest {
 
     /**
      * For each of the 32 single-condition rules, builds a single-rule engine
-     * with both contains strategies and verifies the canonical URL matches.
+     * and verifies the canonical URL matches.
      */
     @ParameterizedTest
     @MethodSource("allSingleConditionRuleNames")
@@ -117,12 +115,10 @@ class RuleEngineIntegrationTest {
 
         var parsed = UrlParser.parse(CANONICAL_URL);
 
-        for (ContainsStrategy strategy : ContainsStrategy.values()) {
-            RuleEngine engine = new RuleEngine(List.of(target), strategy);
-            var result = engine.evaluate(parsed);
-            assertTrue(result.isPresent(),
-                    "Rule " + ruleName + " should match canonical URL with " + strategy);
-            assertEquals(ruleName, result.get());
-        }
+        RuleEngine engine = new RuleEngine(List.of(target));
+        var result = engine.evaluate(parsed);
+        assertTrue(result.isPresent(),
+                "Rule " + ruleName + " should match canonical URL");
+        assertEquals(ruleName, result.get());
     }
 }

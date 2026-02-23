@@ -1,7 +1,6 @@
 package com.ruleengine.engine;
 
 import com.ruleengine.index.CandidateResult;
-import com.ruleengine.index.ContainsStrategy;
 import com.ruleengine.index.RuleIndex;
 import com.ruleengine.rule.Condition;
 import com.ruleengine.rule.Rule;
@@ -26,14 +25,13 @@ public final class RuleEngine {
     private final boolean[] isAllNegated;
 
     /**
-     * Creates an engine with the specified contains strategy.
+     * Creates an engine that evaluates the given rules.
      *
-     * @param rules             the rules to evaluate
-     * @param containsStrategy  the data structure for CONTAINS matching
+     * @param rules the rules to evaluate
      */
-    public RuleEngine(List<Rule> rules, ContainsStrategy containsStrategy) {
+    public RuleEngine(List<Rule> rules) {
         this.sortedRules = rules.stream().sorted().toList();
-        this.index = new RuleIndex(rules, containsStrategy);
+        this.index = new RuleIndex(rules);
         this.sortedRuleIds = new int[sortedRules.size()];
         this.isAllNegated = new boolean[index.ruleCount()];
         for (int i = 0; i < sortedRules.size(); i++) {
@@ -43,15 +41,6 @@ public final class RuleEngine {
                 isAllNegated[sortedRuleIds[i]] = true;
             }
         }
-    }
-
-    /**
-     * Creates an engine using the default {@link ContainsStrategy#AHO_CORASICK} strategy.
-     *
-     * @param rules the rules to evaluate
-     */
-    public RuleEngine(List<Rule> rules) {
-        this(rules, ContainsStrategy.AHO_CORASICK);
     }
 
     /**
