@@ -59,14 +59,15 @@ public final class RuleEngine {
                 continue;
             }
             Rule rule = sortedRules.get(i);
-            if (candidates.allSatisfied(ruleId) && allNegatedConditionsMet(rule, url)) {
+            if (candidates.allSatisfied(ruleId) && noNegatedConditionsMatch(rule, url)) {
                 return Optional.of(rule.result());
             }
         }
         return Optional.empty();
     }
 
-    private boolean allNegatedConditionsMet(Rule rule, ParsedUrl url) {
+    /** Returns {@code true} if none of the rule's negated conditions match the URL. */
+    private boolean noNegatedConditionsMatch(Rule rule, ParsedUrl url) {
         for (Condition cond : rule.conditions()) {
             if (cond.negated() && matchesDirect(cond, url)) {
                 return false;
