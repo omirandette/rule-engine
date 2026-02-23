@@ -21,6 +21,14 @@
 - Java 25, Gradle with version catalogs
 - Javadoc on public classes and public methods
 
+## Benchmarking & Profiling
+- `./gradlew benchmark` — run rule engine throughput benchmark (~200K URLs, ~2000 rules)
+- `./gradlew profileBenchmark -PasyncProfilerLib=<path>` — run benchmark with async-profiler (collapsed stacks output)
+  - Optional: `-PprofileEvent=alloc` for allocation profiling (default: `cpu`)
+- `python3 scripts/profile.py` — run profiler and print text summary
+- `python3 scripts/profile.py --analyze <file>` — analyze existing collapsed stacks file
+- Profile output: `app/build/benchmark/profile.collapsed`
+
 ## Git Workflow
 - Trunk-based development: short-lived feature branches, squash-merge to `main`
 - Branch protection on `main`: PRs required, CI must pass
