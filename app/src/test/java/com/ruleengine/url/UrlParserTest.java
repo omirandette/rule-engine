@@ -96,4 +96,26 @@ class UrlParserTest {
         ParsedUrl url = UrlParser.parse("https://example.com/index.html");
         assertEquals("index.html", url.file());
     }
+
+    @Test
+    void stripsPortFromHost() {
+        ParsedUrl url = UrlParser.parse("https://example.com:8080/path?q=1");
+        assertEquals("example.com", url.host());
+        assertEquals("/path", url.path());
+        assertEquals("q=1", url.query());
+    }
+
+    @Test
+    void stripsPortWithNoPath() {
+        ParsedUrl url = UrlParser.parse("https://example.com:443");
+        assertEquals("example.com", url.host());
+        assertEquals("", url.path());
+    }
+
+    @Test
+    void stripsPortWithNoScheme() {
+        ParsedUrl url = UrlParser.parse("example.com:3000/api/data");
+        assertEquals("example.com", url.host());
+        assertEquals("/api/data", url.path());
+    }
 }
