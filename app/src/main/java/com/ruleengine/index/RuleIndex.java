@@ -71,27 +71,31 @@ public final class RuleIndex {
         for (Rule rule : rules) {
             int id = ruleIds.get(rule);
             for (Condition cond : rule.conditions()) {
-                if (cond.negated()) {
-                    continue;
-                }
-                nonNegatedCounts[id]++;
-                ConditionRef ref = new ConditionRef(id);
-                switch (cond.operator()) {
-                    case EQUALS -> equalsIndexes.get(cond.part())
-                            .computeIfAbsent(cond.value(), _ -> new ArrayList<>())
-                            .add(ref);
-                    case STARTS_WITH -> startsWithIndexes.get(cond.part())
-                            .insert(cond.value(), ref);
-                    case ENDS_WITH -> endsWithIndexes.get(cond.part())
-                            .insert(new StringBuilder(cond.value()).reverse().toString(), ref);
-                    case CONTAINS -> containsAcIndexes.get(cond.part())
-                            .insert(cond.value(), ref);
+                if (!cond.negated()) {
+                    indexCondition(cond, id);
                 }
             }
         }
 
         for (AhoCorasick<ConditionRef> ac : containsAcIndexes.values()) {
             ac.build();
+        }
+    }
+
+    /** Adds a non-negated condition to the appropriate operator-specific index. */
+    private void indexCondition(Condition cond, int ruleId) {
+        nonNegatedCounts[ruleId]++;
+        ConditionRef ref = new ConditionRef(ruleId);
+        switch (cond.operator()) {
+            case EQUALS -> equalsIndexes.get(cond.part())
+                    .computeIfAbsent(cond.value(), _ -> new ArrayList<>())
+                    .add(ref);
+            case STARTS_WITH -> startsWithIndexes.get(cond.part())
+                    .insert(cond.value(), ref);
+            case ENDS_WITH -> endsWithIndexes.get(cond.part())
+                    .insert(new StringBuilder(cond.value()).reverse().toString(), ref);
+            case CONTAINS -> containsAcIndexes.get(cond.part())
+                    .insert(cond.value(), ref);
         }
     }
 

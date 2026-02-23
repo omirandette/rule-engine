@@ -35,6 +35,16 @@ public final class AhoCorasick<V> {
 
     private final List<V> emptyPatternValues = new ArrayList<>();
 
+    // --- Two-phase data structures ---
+    // During insertion, Lists allow dynamic growth as states are allocated.
+    // After build(), these are flattened into fixed-size arrays for cache-friendly
+    // search-phase access (contiguous memory, no List indirection). The build-phase
+    // Lists are then nulled to free memory.
+    //
+    // Each state has two tiers of transitions (same strategy as Trie.Node):
+    //   - ASCII (0–127): direct int[] array per state for O(1) lookup
+    //   - Non-ASCII:      HashMap<Character, Integer> fallback (often null)
+
     // Build-phase structures (nulled after build)
     private List<int[]> gotoRows = new ArrayList<>(INITIAL_CAPACITY);
     @SuppressWarnings("unchecked")
@@ -42,7 +52,7 @@ public final class AhoCorasick<V> {
     private List<List<V>> buildOutput = new ArrayList<>(INITIAL_CAPACITY);
     private int stateCount = 0;
 
-    // Search-phase structures (populated by build)
+    // Search-phase arrays (populated by build, one entry per state)
     private int[][] gotoTable;
     @SuppressWarnings("unchecked")
     private Map<Character, Integer>[] extendedGoto;
@@ -88,111 +98,152 @@ public final class AhoCorasick<V> {
      * the DFA transition table.
      *
      * <p>After this call, no further inserts are allowed and the automaton
-     * is ready for searching.
+     * is ready for searching. The build proceeds in four phases:
+     * <ol>
+     *   <li>Initialize depth-1 states (direct children of root)</li>
+     *   <li>Compute failure links for all deeper states via BFS</li>
+     *   <li>Complete the DFA so every state has a transition for every character</li>
+     *   <li>Flatten build-phase Lists into fixed-size arrays for search</li>
+     * </ol>
      */
-    @SuppressWarnings("unchecked")
     public void build() {
         int[] failure = new int[stateCount];
         Queue<Integer> queue = new ArrayDeque<>();
 
-        // Initialize depth-1 states: failure → root, complete missing root transitions
+        initDepthOneStates(failure, queue);
+        computeFailureLinks(failure, queue);
+        completeDfa(failure, queue);
+        flattenToArrays();
+    }
+
+    /**
+     * Sets failure links for root's direct children to 0 (root) and fills
+     * missing root transitions with self-loops back to root.
+     */
+    private void initDepthOneStates(int[] failure, Queue<Integer> queue) {
         int[] rootRow = gotoRows.get(0);
         for (int c = 0; c < ASCII_SIZE; c++) {
-            int s = rootRow[c];
-            if (s == NO_STATE) {
+            int child = rootRow[c];
+            if (child == NO_STATE) {
                 rootRow[c] = 0; // missing root transitions loop to root
             } else {
-                failure[s] = 0;
-                queue.add(s);
+                failure[child] = 0;
+                queue.add(child);
             }
         }
         Map<Character, Integer> rootExt = extendedRows.get(0);
         if (rootExt != null) {
-            for (Map.Entry<Character, Integer> e : rootExt.entrySet()) {
-                failure[e.getValue()] = 0;
-                queue.add(e.getValue());
+            for (Map.Entry<Character, Integer> entry : rootExt.entrySet()) {
+                failure[entry.getValue()] = 0;
+                queue.add(entry.getValue());
             }
         }
+    }
 
-        // BFS to compute failure links and merge outputs
+    /**
+     * BFS from depth-1 states to compute failure links and merge output lists.
+     * Each state's failure link points to the longest proper suffix of the
+     * path leading to that state which is also a prefix of some pattern.
+     */
+    private void computeFailureLinks(int[] failure, Queue<Integer> queue) {
         while (!queue.isEmpty()) {
-            int r = queue.poll();
-            int[] row = gotoRows.get(r);
+            int current = queue.poll();
+            int[] row = gotoRows.get(current);
 
             for (int c = 0; c < ASCII_SIZE; c++) {
-                int s = row[c];
-                if (s != NO_STATE) {
-                    failure[s] = followFailure(failure, r, (char) c);
-                    mergeOutput(s, failure[s]);
-                    queue.add(s);
+                int child = row[c];
+                if (child != NO_STATE) {
+                    failure[child] = followFailure(failure, current, (char) c);
+                    mergeOutput(child, failure[child]);
+                    queue.add(child);
                 }
             }
 
-            Map<Character, Integer> ext = extendedRows.get(r);
+            Map<Character, Integer> ext = extendedRows.get(current);
             if (ext != null) {
-                for (Map.Entry<Character, Integer> e : ext.entrySet()) {
-                    int s = e.getValue();
-                    failure[s] = followFailure(failure, r, e.getKey());
-                    mergeOutput(s, failure[s]);
-                    queue.add(s);
+                for (Map.Entry<Character, Integer> entry : ext.entrySet()) {
+                    int child = entry.getValue();
+                    failure[child] = followFailure(failure, current, entry.getKey());
+                    mergeOutput(child, failure[child]);
+                    queue.add(child);
                 }
             }
         }
+    }
 
-        // Complete the DFA: fill missing transitions via failure links
-        // (BFS order ensures failure[s] is already completed)
-        // Re-run BFS to fill non-root states
-        queue.clear();
+    /**
+     * Completes the DFA so every state has an explicit transition for every
+     * character. Missing transitions are filled from the failure state's
+     * (already-completed) row. BFS order guarantees that failure states are
+     * processed before their dependents.
+     */
+    private void completeDfa(int[] failure, Queue<Integer> queue) {
+        // Seed BFS with root's direct children (skip root itself)
+        int[] rootRow = gotoRows.get(0);
         for (int c = 0; c < ASCII_SIZE; c++) {
-            int s = rootRow[c];
-            if (s != 0) {
-                queue.add(s);
+            int child = rootRow[c];
+            if (child != 0) {
+                queue.add(child);
             }
         }
+        Map<Character, Integer> rootExt = extendedRows.get(0);
         if (rootExt != null) {
             queue.addAll(rootExt.values());
         }
 
         while (!queue.isEmpty()) {
-            int r = queue.poll();
-            int[] row = gotoRows.get(r);
-            int[] failRow = gotoRows.get(failure[r]);
+            int current = queue.poll();
+            int[] row = gotoRows.get(current);
+            int[] failRow = gotoRows.get(failure[current]);
 
             for (int c = 0; c < ASCII_SIZE; c++) {
                 if (row[c] == NO_STATE) {
-                    row[c] = failRow[c]; // failRow is already complete (BFS order)
+                    row[c] = failRow[c]; // inherit from failure state
                 } else {
                     queue.add(row[c]);
                 }
             }
 
-            // Non-ASCII: inherit from failure state for missing chars
-            Map<Character, Integer> ext = extendedRows.get(r);
-            Map<Character, Integer> failExt = extendedRows.get(failure[r]);
-            if (failExt != null) {
-                for (Map.Entry<Character, Integer> e : failExt.entrySet()) {
-                    if (ext == null) {
-                        ext = new HashMap<>(4);
-                        extendedRows.set(r, ext);
-                    }
-                    ext.putIfAbsent(e.getKey(), e.getValue());
-                }
-            }
-            if (ext != null) {
-                for (int s : ext.values()) {
-                    if (s != 0) {
-                        queue.add(s);
-                    }
+            inheritExtendedTransitions(current, failure[current]);
+            enqueueExtendedChildren(current, queue);
+        }
+    }
+
+    /** Inherits non-ASCII transitions from the failure state for any chars not already present. */
+    private void inheritExtendedTransitions(int state, int failState) {
+        Map<Character, Integer> failExt = extendedRows.get(failState);
+        if (failExt == null) {
+            return;
+        }
+        Map<Character, Integer> ext = extendedRows.get(state);
+        if (ext == null) {
+            ext = new HashMap<>(4);
+            extendedRows.set(state, ext);
+        }
+        for (Map.Entry<Character, Integer> entry : failExt.entrySet()) {
+            ext.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+    }
+
+    /** Adds non-root non-ASCII child states to the BFS queue. */
+    private void enqueueExtendedChildren(int state, Queue<Integer> queue) {
+        Map<Character, Integer> ext = extendedRows.get(state);
+        if (ext != null) {
+            for (int child : ext.values()) {
+                if (child != 0) {
+                    queue.add(child);
                 }
             }
         }
+    }
 
-        // Flatten to arrays for search
+    /** Flattens build-phase Lists into arrays and releases build-phase memory. */
+    @SuppressWarnings("unchecked")
+    private void flattenToArrays() {
         gotoTable = gotoRows.toArray(new int[0][]);
         extendedGoto = extendedRows.toArray(new Map[0]);
         output = buildOutput.toArray(new List[0]);
 
-        // Release build-phase structures
         gotoRows = null;
         extendedRows = null;
         buildOutput = null;
@@ -273,13 +324,17 @@ public final class AhoCorasick<V> {
         }
     }
 
+    /**
+     * Walks the failure chain from {@code parent} to find the deepest state
+     * that has a goto transition for {@code c}, then returns that target.
+     */
     private int followFailure(int[] failure, int parent, char c) {
-        int f = failure[parent];
-        while (f != 0 && getGoto(f, c) == NO_STATE) {
-            f = failure[f];
+        int state = failure[parent];
+        while (state != 0 && getGoto(state, c) == NO_STATE) {
+            state = failure[state];
         }
-        int g = getGoto(f, c);
-        return (g != NO_STATE && g != 0) ? g : (getGoto(0, c) != NO_STATE ? getGoto(0, c) : 0);
+        int target = getGoto(state, c);
+        return target != NO_STATE ? target : 0;
     }
 
     private void mergeOutput(int state, int failState) {

@@ -93,6 +93,19 @@ public final class Trie<V> {
         return result;
     }
 
+    /**
+     * Hybrid trie node using a two-tier child storage strategy:
+     * <ul>
+     *   <li>ASCII characters (0–127) are stored in a direct-indexed {@code Object[]}
+     *       for O(1) lookup with no hashing overhead.</li>
+     *   <li>Non-ASCII characters fall back to a {@link HashMap}, which is only
+     *       allocated when needed (most URL data is ASCII-only).</li>
+     * </ul>
+     *
+     * <p>The {@code ascii} array stores {@code Node} references as {@code Object}
+     * to avoid a self-referential generic array ({@code Node[]} is not allowed in
+     * an inner class context without unchecked warnings either way).
+     */
     private final class Node {
         private static final int ASCII_SIZE = 128;
 

@@ -11,6 +11,8 @@ package com.ruleengine.url;
  */
 public final class UrlParser {
 
+    private static final String SCHEME_SEPARATOR = "://";
+
     private UrlParser() {}
 
     /**
@@ -26,36 +28,44 @@ public final class UrlParser {
         }
 
         String toParse = raw.strip();
-
-        // Skip past scheme if present; reject empty scheme (e.g. "://bad")
-        int hostStart;
-        int schemeEnd = toParse.indexOf("://");
-        if (schemeEnd > 0) {
-            hostStart = schemeEnd + 3;
-        } else if (schemeEnd == 0) {
-            throw new IllegalArgumentException("Could not parse host from URL: " + raw);
-        } else {
-            hostStart = 0;
-        }
+        int hostStart = findHostStart(toParse, raw);
 
         // Find first '/' and '?' after hostStart to delimit host/path/query
         int pathStart = toParse.indexOf('/', hostStart);
         int queryStart = toParse.indexOf('?', hostStart);
 
-        // Host ends at whichever delimiter comes first, or at end of string
-        int hostEnd;
-        if (pathStart >= 0 && queryStart >= 0) {
-            hostEnd = Math.min(pathStart, queryStart);
-        } else if (pathStart >= 0) {
-            hostEnd = pathStart;
-        } else if (queryStart >= 0) {
-            hostEnd = queryStart;
-        } else {
-            hostEnd = toParse.length();
+        String host = extractHost(toParse, raw, hostStart, pathStart, queryStart);
+        String path = extractPath(toParse, pathStart, queryStart);
+        String file = extractFile(path);
+        String query = extractQuery(toParse, queryStart);
+
+        return new ParsedUrl(host, path, file, query);
+    }
+
+    /**
+     * Finds the start index of the host by skipping past the scheme separator.
+     * Returns 0 if no scheme is present.
+     */
+    private static int findHostStart(String toParse, String raw) {
+        int schemeEnd = toParse.indexOf(SCHEME_SEPARATOR);
+        if (schemeEnd > 0) {
+            return schemeEnd + SCHEME_SEPARATOR.length();
         }
+        if (schemeEnd == 0) {
+            throw new IllegalArgumentException("Could not parse host from URL: " + raw);
+        }
+        return 0;
+    }
+
+    /**
+     * Extracts and normalizes the host: finds the boundary, strips port, lowercases.
+     */
+    private static String extractHost(
+            String toParse, String raw, int hostStart, int pathStart, int queryStart) {
+        int hostEnd = firstDelimiterOrEnd(toParse, pathStart, queryStart);
+        String host = toParse.substring(hostStart, hostEnd);
 
         // Strip port (e.g. "host:8080" → "host")
-        String host = toParse.substring(hostStart, hostEnd);
         int portIndex = host.indexOf(':');
         if (portIndex >= 0) {
             host = host.substring(0, portIndex);
@@ -64,28 +74,37 @@ public final class UrlParser {
         if (host.isEmpty()) {
             throw new IllegalArgumentException("Could not parse host from URL: " + raw);
         }
-        host = host.toLowerCase();
+        return host.toLowerCase();
+    }
 
-        // Extract path: only if '/' appears before '?' (or there is no '?')
-        String path;
+    /** Returns the earliest non-negative delimiter position, or end of string. */
+    private static int firstDelimiterOrEnd(String toParse, int pathStart, int queryStart) {
+        if (pathStart >= 0 && queryStart >= 0) {
+            return Math.min(pathStart, queryStart);
+        }
+        if (pathStart >= 0) {
+            return pathStart;
+        }
+        if (queryStart >= 0) {
+            return queryStart;
+        }
+        return toParse.length();
+    }
+
+    /**
+     * Extracts the path segment: present only if '/' appears before '?' (or there is no '?').
+     */
+    private static String extractPath(String toParse, int pathStart, int queryStart) {
         if (pathStart >= 0 && (queryStart < 0 || pathStart < queryStart)) {
             int pathEnd = queryStart >= 0 ? queryStart : toParse.length();
-            path = toParse.substring(pathStart, pathEnd);
-        } else {
-            path = "";
+            return toParse.substring(pathStart, pathEnd);
         }
+        return "";
+    }
 
-        String file = extractFile(path);
-
-        // Extract query: everything after '?'
-        String query;
-        if (queryStart >= 0) {
-            query = toParse.substring(queryStart + 1);
-        } else {
-            query = "";
-        }
-
-        return new ParsedUrl(host, path, file, query);
+    /** Extracts the query string (everything after '?'), or empty if absent. */
+    private static String extractQuery(String toParse, int queryStart) {
+        return queryStart >= 0 ? toParse.substring(queryStart + 1) : "";
     }
 
     /**
