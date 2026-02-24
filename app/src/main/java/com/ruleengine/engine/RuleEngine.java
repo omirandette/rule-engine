@@ -7,7 +7,6 @@ import com.ruleengine.rule.Rule;
 import com.ruleengine.url.ParsedUrl;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Evaluates a parsed URL against a set of rules and returns the result
@@ -44,12 +43,12 @@ public final class RuleEngine {
 
     /**
      * Evaluates a parsed URL against all rules and returns the result of the
-     * highest-priority matching rule, or empty if no rule matches.
+     * highest-priority matching rule, or {@code null} if no rule matches.
      *
      * @param url the parsed URL to evaluate
-     * @return the result string of the matching rule, or {@link Optional#empty()}
+     * @return the result string of the matching rule, or {@code null}
      */
-    public Optional<String> evaluate(ParsedUrl url) {
+    public String evaluate(ParsedUrl url) {
         CandidateResult candidates = index.queryCandidates(url);
 
         for (SortedEntry entry : entries) {
@@ -58,10 +57,10 @@ public final class RuleEngine {
             }
             if (candidates.allSatisfied(entry.ruleId)
                     && noNegatedConditionsMatch(entry.rule, url)) {
-                return Optional.of(entry.rule.result());
+                return entry.rule.result();
             }
         }
-        return Optional.empty();
+        return null;
     }
 
     /** Returns {@code true} if none of the rule's negated conditions match the URL. */
