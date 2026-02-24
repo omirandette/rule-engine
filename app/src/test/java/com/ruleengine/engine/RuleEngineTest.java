@@ -8,7 +8,6 @@ import com.ruleengine.url.UrlPart;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -43,8 +42,8 @@ class RuleEngineTest {
         Rule r = rule("eq", 1, "matched", cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(url("example.com", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("other.com", "/", "")));
+        assertEquals("matched", engine.evaluate(url("example.com", "/", "")));
+        assertNull(engine.evaluate(url("other.com", "/", "")));
     }
 
     @Test
@@ -52,8 +51,8 @@ class RuleEngineTest {
         Rule r = rule("ct", 1, "matched", cond(UrlPart.PATH, Operator.CONTAINS, "sport"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(url("x.com", "/category/sport/items", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/category/news", "")));
+        assertEquals("matched", engine.evaluate(url("x.com", "/category/sport/items", "")));
+        assertNull(engine.evaluate(url("x.com", "/category/news", "")));
     }
 
     @Test
@@ -61,8 +60,8 @@ class RuleEngineTest {
         Rule r = rule("sw", 1, "matched", cond(UrlPart.PATH, Operator.STARTS_WITH, "/api"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(url("x.com", "/api/users", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/web/api", "")));
+        assertEquals("matched", engine.evaluate(url("x.com", "/api/users", "")));
+        assertNull(engine.evaluate(url("x.com", "/web/api", "")));
     }
 
     @Test
@@ -70,8 +69,8 @@ class RuleEngineTest {
         Rule r = rule("ew", 1, "matched", cond(UrlPart.HOST, Operator.ENDS_WITH, ".ca"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"), engine.evaluate(url("shop.example.ca", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("shop.example.com", "/", "")));
+        assertEquals("matched", engine.evaluate(url("shop.example.ca", "/", "")));
+        assertNull(engine.evaluate(url("shop.example.com", "/", "")));
     }
 
     // --- Negation tests ---
@@ -82,8 +81,8 @@ class RuleEngineTest {
                 negCond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("not-example"), engine.evaluate(url("other.com", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("example.com", "/", "")));
+        assertEquals("not-example", engine.evaluate(url("other.com", "/", "")));
+        assertNull(engine.evaluate(url("example.com", "/", "")));
     }
 
     @Test
@@ -92,8 +91,8 @@ class RuleEngineTest {
                 negCond(UrlPart.PATH, Operator.CONTAINS, "sport"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("no-sport"), engine.evaluate(url("x.com", "/news", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/sport/live", "")));
+        assertEquals("no-sport", engine.evaluate(url("x.com", "/news", "")));
+        assertNull(engine.evaluate(url("x.com", "/sport/live", "")));
     }
 
     @Test
@@ -102,8 +101,8 @@ class RuleEngineTest {
                 negCond(UrlPart.PATH, Operator.STARTS_WITH, "/admin"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("not-admin"), engine.evaluate(url("x.com", "/user", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/admin/panel", "")));
+        assertEquals("not-admin", engine.evaluate(url("x.com", "/user", "")));
+        assertNull(engine.evaluate(url("x.com", "/admin/panel", "")));
     }
 
     @Test
@@ -112,8 +111,8 @@ class RuleEngineTest {
                 negCond(UrlPart.HOST, Operator.ENDS_WITH, ".ca"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("not-ca"), engine.evaluate(url("example.com", "/", "")));
-        assertEquals(Optional.empty(), engine.evaluate(url("example.ca", "/", "")));
+        assertEquals("not-ca", engine.evaluate(url("example.com", "/", "")));
+        assertNull(engine.evaluate(url("example.ca", "/", "")));
     }
 
     // --- Compound rule tests ---
@@ -125,12 +124,10 @@ class RuleEngineTest {
                 cond(UrlPart.PATH, Operator.CONTAINS, "sport"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("Canada Sport"),
+        assertEquals("Canada Sport",
                 engine.evaluate(url("shop.example.ca", "/category/sport/items", "")));
-        assertEquals(Optional.empty(),
-                engine.evaluate(url("shop.example.ca", "/category/news", "")));
-        assertEquals(Optional.empty(),
-                engine.evaluate(url("shop.example.com", "/category/sport", "")));
+        assertNull(engine.evaluate(url("shop.example.ca", "/category/news", "")));
+        assertNull(engine.evaluate(url("shop.example.com", "/category/sport", "")));
     }
 
     @Test
@@ -140,12 +137,10 @@ class RuleEngineTest {
                 negCond(UrlPart.PATH, Operator.STARTS_WITH, "/admin"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("result"),
+        assertEquals("result",
                 engine.evaluate(url("example.com", "/user", "")));
-        assertEquals(Optional.empty(),
-                engine.evaluate(url("example.com", "/admin/panel", "")));
-        assertEquals(Optional.empty(),
-                engine.evaluate(url("other.com", "/user", "")));
+        assertNull(engine.evaluate(url("example.com", "/admin/panel", "")));
+        assertNull(engine.evaluate(url("other.com", "/user", "")));
     }
 
     // --- Priority tests ---
@@ -158,7 +153,7 @@ class RuleEngineTest {
                 cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleEngine engine = new RuleEngine(List.of(low, high));
 
-        assertEquals(Optional.of("high-result"),
+        assertEquals("high-result",
                 engine.evaluate(url("example.com", "/", "")));
     }
 
@@ -170,8 +165,8 @@ class RuleEngineTest {
                 cond(UrlPart.HOST, Operator.ENDS_WITH, ".com"));
         RuleEngine engine = new RuleEngine(List.of(first, second));
 
-        Optional<String> result = engine.evaluate(url("example.com", "/", ""));
-        assertEquals(Optional.of("first-result"), result);
+        String result = engine.evaluate(url("example.com", "/", ""));
+        assertEquals("first-result", result);
     }
 
     @Test
@@ -182,7 +177,7 @@ class RuleEngineTest {
                 cond(UrlPart.HOST, Operator.ENDS_WITH, ".com"));
         RuleEngine engine = new RuleEngine(List.of(high, low));
 
-        assertEquals(Optional.of("low-result"),
+        assertEquals("low-result",
                 engine.evaluate(url("example.com", "/", "")));
     }
 
@@ -191,14 +186,14 @@ class RuleEngineTest {
     @Test
     void noRulesReturnsEmpty() {
         RuleEngine engine = new RuleEngine(List.of());
-        assertEquals(Optional.empty(), engine.evaluate(url("x.com", "/", "")));
+        assertNull(engine.evaluate(url("x.com", "/", "")));
     }
 
     @Test
-    void noMatchReturnsEmpty() {
+    void noMatchReturnsNull() {
         Rule r = rule("r", 1, "result", cond(UrlPart.HOST, Operator.EQUALS, "specific.com"));
         RuleEngine engine = new RuleEngine(List.of(r));
-        assertEquals(Optional.empty(), engine.evaluate(url("other.com", "/", "")));
+        assertNull(engine.evaluate(url("other.com", "/", "")));
     }
 
     @Test
@@ -207,10 +202,9 @@ class RuleEngineTest {
                 cond(UrlPart.QUERY, Operator.CONTAINS, "lang=en"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("query-match"),
+        assertEquals("query-match",
                 engine.evaluate(url("x.com", "/", "q=test&lang=en")));
-        assertEquals(Optional.empty(),
-                engine.evaluate(url("x.com", "/", "q=test&lang=fr")));
+        assertNull(engine.evaluate(url("x.com", "/", "q=test&lang=fr")));
     }
 
     @Test
@@ -219,7 +213,7 @@ class RuleEngineTest {
                 cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("matched"),
+        assertEquals("matched",
                 engine.evaluate(url("example.com", "", "")));
     }
 
@@ -229,9 +223,8 @@ class RuleEngineTest {
                 cond(UrlPart.FILE, Operator.ENDS_WITH, ".html"));
         RuleEngine engine = new RuleEngine(List.of(r));
 
-        assertEquals(Optional.of("html-file"),
+        assertEquals("html-file",
                 engine.evaluate(url("x.com", "/page/index.html", "")));
-        assertEquals(Optional.empty(),
-                engine.evaluate(url("x.com", "/page/data.json", "")));
+        assertNull(engine.evaluate(url("x.com", "/page/data.json", "")));
     }
 }

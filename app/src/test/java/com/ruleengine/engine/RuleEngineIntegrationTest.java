@@ -117,8 +117,7 @@ class RuleEngineIntegrationTest {
 
         RuleEngine engine = new RuleEngine(List.of(target));
         var result = engine.evaluate(parsed);
-        assertTrue(result.isPresent(),
-                "Rule " + ruleName + " should match canonical URL");
-        assertEquals(ruleName, result.get());
+        assertNotNull(result, "Rule " + ruleName + " should match canonical URL");
+        assertEquals(ruleName, result);
     }
 }

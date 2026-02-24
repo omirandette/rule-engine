@@ -16,7 +16,6 @@ import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -150,8 +149,7 @@ public class BenchmarkRunner {
     private static int runPass(RuleEngine engine, ParsedUrl[] urls) {
         int matches = 0;
         for (ParsedUrl url : urls) {
-            Optional<String> result = engine.evaluate(url);
-            if (result.isPresent()) {
+            if (engine.evaluate(url) != null) {
                 matches++;
             }
         }

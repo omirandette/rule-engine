@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * Processes batches of URLs against a {@link RuleEngine}.
@@ -70,8 +69,8 @@ public final class BatchProcessor {
         String stripped = line.strip();
         try {
             ParsedUrl parsed = UrlParser.parse(stripped);
-            Optional<String> result = engine.evaluate(parsed);
-            return new UrlResult(stripped, result.orElse("NO_MATCH"));
+            String result = engine.evaluate(parsed);
+            return new UrlResult(stripped, result != null ? result : "NO_MATCH");
         } catch (IllegalArgumentException e) {
             return new UrlResult(stripped, "INVALID_URL");
         }
