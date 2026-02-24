@@ -42,10 +42,21 @@ public final class RuleIndex {
     private final Map<Rule, Integer> ruleIds;
     private final int ruleCount;
     private final int[] nonNegatedCounts;
-    private final CandidateResult reusableCandidates;
     private final boolean[] hasEndsWith;
-    private final Consumer<ConditionRef> incrementConsumer;
-    private char[] reverseBuf = new char[256];
+    private final ThreadLocal<QueryContext> threadContext;
+
+    /** Per-thread mutable state used during {@link #queryCandidates(ParsedUrl)}. */
+    private static final class QueryContext {
+        final CandidateResult candidates;
+        final Consumer<ConditionRef> incrementConsumer;
+        char[] reverseBuf;
+
+        QueryContext(int ruleCount, int[] nonNegatedCounts) {
+            this.candidates = new CandidateResult(ruleCount, nonNegatedCounts);
+            this.incrementConsumer = ref -> candidates.increment(ref.ruleId());
+            this.reverseBuf = new char[256];
+        }
+    }
 
     /**
      * Builds the index from a list of rules.
@@ -85,8 +96,8 @@ public final class RuleIndex {
             ac.build();
         }
 
-        this.reusableCandidates = new CandidateResult(ruleCount, nonNegatedCounts);
-        this.incrementConsumer = ref -> reusableCandidates.increment(ref.ruleId());
+        this.threadContext = ThreadLocal.withInitial(
+                () -> new QueryContext(ruleCount, nonNegatedCounts));
 
         UrlPart[] parts = UrlPart.values();
         this.hasEndsWith = new boolean[parts.length];
@@ -148,7 +159,8 @@ public final class RuleIndex {
      * @return a {@link CandidateResult} with satisfied conditions per rule ID
      */
     public CandidateResult queryCandidates(ParsedUrl url) {
-        reusableCandidates.reset();
+        QueryContext ctx = threadContext.get();
+        ctx.candidates.reset();
 
         for (UrlPart part : UrlPart.values()) {
             String value = url.part(part);
@@ -156,25 +168,25 @@ public final class RuleIndex {
             List<ConditionRef> eqRefs = equalsIndexes.get(part).get(value);
             if (eqRefs != null) {
                 for (ConditionRef ref : eqRefs) {
-                    incrementConsumer.accept(ref);
+                    ctx.incrementConsumer.accept(ref);
                 }
             }
 
-            startsWithIndexes.get(part).findPrefixesOf(value, incrementConsumer);
+            startsWithIndexes.get(part).findPrefixesOf(value, ctx.incrementConsumer);
 
             if (hasEndsWith[part.ordinal()]) {
                 int len = value.length();
-                if (len > reverseBuf.length) {
-                    reverseBuf = new char[len];
+                if (len > ctx.reverseBuf.length) {
+                    ctx.reverseBuf = new char[len];
                 }
                 for (int i = 0; i < len; i++) {
-                    reverseBuf[i] = value.charAt(len - 1 - i);
+                    ctx.reverseBuf[i] = value.charAt(len - 1 - i);
                 }
-                endsWithIndexes.get(part).findPrefixesOf(reverseBuf, len, incrementConsumer);
+                endsWithIndexes.get(part).findPrefixesOf(ctx.reverseBuf, len, ctx.incrementConsumer);
             }
 
-            containsAcIndexes.get(part).search(value, incrementConsumer);
+            containsAcIndexes.get(part).search(value, ctx.incrementConsumer);
         }
-        return reusableCandidates;
+        return ctx.candidates;
     }
 }
