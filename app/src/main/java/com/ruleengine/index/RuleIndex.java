@@ -42,6 +42,10 @@ public final class RuleIndex {
     private final Map<Rule, Integer> ruleIds;
     private final int ruleCount;
     private final int[] nonNegatedCounts;
+    private final CandidateResult reusableCandidates;
+    private final boolean[] hasEndsWith;
+    private final Consumer<ConditionRef> incrementConsumer;
+    private char[] reverseBuf = new char[256];
 
     /**
      * Builds the index from a list of rules.
@@ -79,6 +83,15 @@ public final class RuleIndex {
 
         for (AhoCorasick<ConditionRef> ac : containsAcIndexes.values()) {
             ac.build();
+        }
+
+        this.reusableCandidates = new CandidateResult(ruleCount, nonNegatedCounts);
+        this.incrementConsumer = ref -> reusableCandidates.increment(ref.ruleId());
+
+        UrlPart[] parts = UrlPart.values();
+        this.hasEndsWith = new boolean[parts.length];
+        for (UrlPart part : parts) {
+            hasEndsWith[part.ordinal()] = !endsWithIndexes.get(part).isEmpty();
         }
     }
 
@@ -135,36 +148,33 @@ public final class RuleIndex {
      * @return a {@link CandidateResult} with satisfied conditions per rule ID
      */
     public CandidateResult queryCandidates(ParsedUrl url) {
-        CandidateResult candidates = new CandidateResult(ruleCount, nonNegatedCounts);
-        Consumer<ConditionRef> consumer = ref -> candidates.increment(ref.ruleId());
-        UrlPart[] parts = UrlPart.values();
+        reusableCandidates.reset();
 
-        // Pre-compute reversed values only for parts that have ENDS_WITH rules
-        String[] reversed = new String[parts.length];
-        for (UrlPart part : parts) {
-            if (!endsWithIndexes.get(part).isEmpty()) {
-                reversed[part.ordinal()] = new StringBuilder(url.part(part)).reverse().toString();
-            }
-        }
-
-        for (UrlPart part : parts) {
+        for (UrlPart part : UrlPart.values()) {
             String value = url.part(part);
 
             List<ConditionRef> eqRefs = equalsIndexes.get(part).get(value);
             if (eqRefs != null) {
                 for (ConditionRef ref : eqRefs) {
-                    consumer.accept(ref);
+                    incrementConsumer.accept(ref);
                 }
             }
 
-            startsWithIndexes.get(part).findPrefixesOf(value, consumer);
+            startsWithIndexes.get(part).findPrefixesOf(value, incrementConsumer);
 
-            if (reversed[part.ordinal()] != null) {
-                endsWithIndexes.get(part).findPrefixesOf(reversed[part.ordinal()], consumer);
+            if (hasEndsWith[part.ordinal()]) {
+                int len = value.length();
+                if (len > reverseBuf.length) {
+                    reverseBuf = new char[len];
+                }
+                for (int i = 0; i < len; i++) {
+                    reverseBuf[i] = value.charAt(len - 1 - i);
+                }
+                endsWithIndexes.get(part).findPrefixesOf(reverseBuf, len, incrementConsumer);
             }
 
-            containsAcIndexes.get(part).search(value, consumer);
+            containsAcIndexes.get(part).search(value, incrementConsumer);
         }
-        return candidates;
+        return reusableCandidates;
     }
 }
