@@ -1,5 +1,7 @@
 package com.ruleengine.index;
 
+import java.util.Arrays;
+
 /**
  * Dense array-based container tracking how many non-negated conditions
  * are satisfied per rule.
@@ -23,6 +25,13 @@ public final class CandidateResult {
     public CandidateResult(int ruleCount, int[] nonNegatedCounts) {
         this.satisfiedCounts = new int[ruleCount];
         this.nonNegatedCounts = nonNegatedCounts;
+    }
+
+    /**
+     * Resets all satisfied counts to zero so this instance can be reused.
+     */
+    public void reset() {
+        Arrays.fill(satisfiedCounts, 0);
     }
 
     /**
