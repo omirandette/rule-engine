@@ -205,8 +205,10 @@ public final class AhoCorasick<V> {
                 }
             }
 
-            inheritExtendedTransitions(current, failure[current]);
+            // Enqueue original children BEFORE inheriting from failure state,
+            // so inherited transitions are not re-enqueued (which causes infinite loops).
             enqueueExtendedChildren(current, queue);
+            inheritExtendedTransitions(current, failure[current]);
         }
     }
 
