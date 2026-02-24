@@ -35,3 +35,7 @@
 - Do not commit unless explicitly asked
 - Always run tests before creating a PR
 - Keep PRs under 200 lines of code; 400 lines max in exceptional cases
+- Never use heredocs or multiline strings in Bash commands (glob patterns don't match across newlines)
+- Git commits: use single-line `-m "message"` or multiple `-m` flags for paragraphs
+- PR creation: write the body to a temp file, then use `gh pr create --body-file <file>`
+- Always ask before running `gh pr merge --admin`
