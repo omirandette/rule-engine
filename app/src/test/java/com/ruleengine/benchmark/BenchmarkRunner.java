@@ -8,6 +8,8 @@ import com.ruleengine.url.UrlParser;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
@@ -68,12 +70,21 @@ public class BenchmarkRunner {
                 NUM_FMT.format(singlePassMs), iterations, TARGET_BENCHMARK_MS / 1000);
 
         System.out.println("\nRunning benchmark...");
+        long gcCountBefore = totalGcCount();
+        long gcTimeBefore = totalGcTimeMs();
+        long allocBefore = threadAllocatedBytes();
+
         int matchCount = 0;
         long benchStart = System.nanoTime();
         for (int i = 0; i < iterations; i++) {
             matchCount = runPass(engine, parsedUrls);
         }
         long benchNanos = System.nanoTime() - benchStart;
+
+        long gcCountAfter = totalGcCount();
+        long gcTimeAfter = totalGcTimeMs();
+        long allocAfter = threadAllocatedBytes();
+
         double benchSeconds = benchNanos / 1_000_000_000.0;
         long totalEvaluated = (long) iterations * parsedUrls.length;
         long throughput = (long) (totalEvaluated / benchSeconds);
@@ -93,6 +104,28 @@ public class BenchmarkRunner {
                 matchRate,
                 NUM_FMT.format(matchCount),
                 NUM_FMT.format(parsedUrls.length));
+
+        long gcCollections = gcCountAfter - gcCountBefore;
+        long gcPauseMs = gcTimeAfter - gcTimeBefore;
+        double gcPausePercent = 100.0 * gcPauseMs / (benchSeconds * 1000);
+        long bytesAllocated = allocAfter - allocBefore;
+        double allocRateMBs = bytesAllocated / (benchSeconds * 1024 * 1024);
+        long bytesPerUrl = totalEvaluated > 0 ? bytesAllocated / totalEvaluated : 0;
+
+        System.out.printf("""
+
+                === GC & Memory ===
+                  GC collections:      %s
+                  GC pause time:       %.2f s (%.1f%% of wall time)
+                  Bytes allocated:     %s
+                  Allocation rate:     %.0f MB/s
+                  Bytes per URL:       %d B
+                """,
+                NUM_FMT.format(gcCollections),
+                gcPauseMs / 1000.0, gcPausePercent,
+                formatBytes(bytesAllocated),
+                allocRateMBs,
+                bytesPerUrl);
     }
 
     private static int runPass(RuleEngine engine, ParsedUrl[] urls) {
@@ -153,5 +186,56 @@ public class BenchmarkRunner {
 
     private static String jsonString(String value) {
         return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private static long totalGcCount() {
+        long total = 0;
+        for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
+            long count = gc.getCollectionCount();
+            if (count >= 0) {
+                total += count;
+            }
+        }
+        return total;
+    }
+
+    private static long totalGcTimeMs() {
+        long total = 0;
+        for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
+            long time = gc.getCollectionTime();
+            if (time >= 0) {
+                total += time;
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Returns the number of bytes allocated by the current thread, or -1 if unsupported.
+     *
+     * <p>Uses the {@code com.sun.management.ThreadMXBean} extension available on HotSpot JVMs.
+     */
+    private static long threadAllocatedBytes() {
+        var bean = ManagementFactory.getThreadMXBean();
+        if (bean instanceof com.sun.management.ThreadMXBean threadBean) {
+            return threadBean.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        }
+        return -1;
+    }
+
+    private static String formatBytes(long bytes) {
+        if (bytes < 0) {
+            return "N/A (unsupported)";
+        }
+        if (bytes < 1024) {
+            return bytes + " B";
+        }
+        if (bytes < 1024 * 1024) {
+            return String.format("%.1f KB", bytes / 1024.0);
+        }
+        if (bytes < 1024L * 1024 * 1024) {
+            return String.format("%.1f MB", bytes / (1024.0 * 1024));
+        }
+        return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
     }
 }
