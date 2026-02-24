@@ -85,6 +85,34 @@ public final class Trie<V> {
     }
 
     /**
+     * Invokes the consumer for each value whose key is a prefix of the input buffer.
+     *
+     * <p>Reads {@code length} characters from the buffer starting at index 0.
+     * This avoids allocating a String when the caller already has the data in a char array.
+     *
+     * @param input    the character buffer to match prefixes against
+     * @param length   number of characters to read from the buffer
+     * @param consumer called for each matching value
+     */
+    public void findPrefixesOf(char[] input, int length, Consumer<V> consumer) {
+        for (V v : emptyKeyValues) {
+            consumer.accept(v);
+        }
+        Node current = root;
+        for (int i = 0; i < length; i++) {
+            current = current.child(input[i]);
+            if (current == null) {
+                return;
+            }
+            if (current.values != null) {
+                for (V v : current.values) {
+                    consumer.accept(v);
+                }
+            }
+        }
+    }
+
+    /**
      * Returns all values whose keys are prefixes of the given input.
      *
      * @param input the string to match prefixes against
