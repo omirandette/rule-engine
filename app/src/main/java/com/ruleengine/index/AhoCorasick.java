@@ -67,6 +67,15 @@ public final class AhoCorasick<V> {
     }
 
     /**
+     * Returns {@code true} if no patterns have been inserted.
+     *
+     * @return {@code true} if the automaton has no patterns
+     */
+    public boolean isEmpty() {
+        return emptyPatternValues.isEmpty() && stateCount <= 1;
+    }
+
+    /**
      * Inserts a pattern with an associated value into the automaton.
      *
      * @param pattern the pattern string

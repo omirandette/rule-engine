@@ -51,7 +51,10 @@ public final class RuleIndex {
     private final Map<Rule, Integer> ruleIds;
     private final int ruleCount;
     private final int[] nonNegatedCounts;
+    private final boolean[] hasEquals;
+    private final boolean[] hasStartsWith;
     private final boolean[] hasEndsWith;
+    private final boolean[] hasContains;
     private final ThreadLocal<QueryContext> threadContext;
 
     /** Per-thread mutable state used during {@link #queryCandidates(ParsedUrl)}. */
@@ -103,9 +106,15 @@ public final class RuleIndex {
         this.threadContext = ThreadLocal.withInitial(
                 () -> new QueryContext(ruleCount, nonNegatedCounts));
 
+        this.hasEquals = new boolean[PART_COUNT];
+        this.hasStartsWith = new boolean[PART_COUNT];
         this.hasEndsWith = new boolean[PART_COUNT];
+        this.hasContains = new boolean[PART_COUNT];
         for (int p = 0; p < PART_COUNT; p++) {
+            hasEquals[p] = !equalsIndexes[p].isEmpty();
+            hasStartsWith[p] = !startsWithIndexes[p].isEmpty();
             hasEndsWith[p] = !endsWithIndexes[p].isEmpty();
+            hasContains[p] = !containsAcIndexes[p].isEmpty();
         }
     }
 
@@ -170,14 +179,18 @@ public final class RuleIndex {
             int p = part.ordinal();
             String value = url.part(part);
 
-            List<ConditionRef> eqRefs = equalsIndexes[p].get(value);
-            if (eqRefs != null) {
-                for (int i = 0, size = eqRefs.size(); i < size; i++) {
-                    ctx.incrementConsumer.accept(eqRefs.get(i));
+            if (hasEquals[p]) {
+                List<ConditionRef> eqRefs = equalsIndexes[p].get(value);
+                if (eqRefs != null) {
+                    for (int i = 0, size = eqRefs.size(); i < size; i++) {
+                        ctx.incrementConsumer.accept(eqRefs.get(i));
+                    }
                 }
             }
 
-            startsWithIndexes[p].findPrefixesOf(value, ctx.incrementConsumer);
+            if (hasStartsWith[p]) {
+                startsWithIndexes[p].findPrefixesOf(value, ctx.incrementConsumer);
+            }
 
             if (hasEndsWith[p]) {
                 int len = value.length();
@@ -190,7 +203,9 @@ public final class RuleIndex {
                 endsWithIndexes[p].findPrefixesOf(ctx.reverseBuf, len, ctx.incrementConsumer);
             }
 
-            containsAcIndexes[p].search(value, ctx.incrementConsumer);
+            if (hasContains[p]) {
+                containsAcIndexes[p].search(value, ctx.incrementConsumer);
+            }
         }
         return ctx.candidates;
     }
