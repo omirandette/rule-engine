@@ -94,7 +94,9 @@ tasks.register<JavaExec>("benchmark") {
     group = "verification"
     classpath = sourceSets["test"].runtimeClasspath
     mainClass = "com.ruleengine.benchmark.BenchmarkRunner"
+    val threadCount = providers.gradleProperty("threads").orElse("1")
     jvmArgs("-XX:+UseParallelGC", "-Xms512m", "-Xmx512m")
+    args("42", threadCount.get())
     if (project.hasProperty("profile")) {
         jvmArgs("-XX:StartFlightRecording=filename=${project.layout.buildDirectory.get()}/benchmark.jfr,settings=profile")
     }

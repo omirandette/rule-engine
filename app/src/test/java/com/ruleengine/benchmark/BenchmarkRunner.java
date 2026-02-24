@@ -13,9 +13,14 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Macro-benchmark for measuring rule engine throughput with a realistic workload.
@@ -28,9 +33,13 @@ public class BenchmarkRunner {
     private static final long TARGET_BENCHMARK_MS = 60_000;
     private static final NumberFormat NUM_FMT = NumberFormat.getIntegerInstance(Locale.US);
 
-    /** Main entry point. Optional arg: random seed (default 42). */
+    /** Main entry point. Optional args: seed (default 42), threads (default 1). */
     public static void main(String[] args) throws IOException {
         long seed = args.length > 0 ? Long.parseLong(args[0]) : 42;
+        int threads = args.length > 1 ? Integer.parseInt(args[1]) : 1;
+        if (threads < 1) {
+            throw new IllegalArgumentException("threads must be >= 1, got " + threads);
+        }
 
         System.out.println("=== Rule Engine Benchmark ===");
         System.out.printf("Generating data (seed=%d)...%n", seed);
@@ -58,6 +67,8 @@ public class BenchmarkRunner {
         long buildMs = (System.nanoTime() - buildStart) / 1_000_000;
         System.out.printf("  Index build time: %s ms%n", NUM_FMT.format(buildMs));
 
+        System.out.printf("Threads: %d%n", threads);
+
         System.out.println("\nWarmup pass...");
         runPass(engine, parsedUrls);
 
@@ -74,12 +85,20 @@ public class BenchmarkRunner {
         long gcTimeBefore = totalGcTimeMs();
         long allocBefore = threadAllocatedBytes();
 
-        int matchCount = 0;
-        long benchStart = System.nanoTime();
-        for (int i = 0; i < iterations; i++) {
-            matchCount = runPass(engine, parsedUrls);
+        int matchCount;
+        long benchNanos;
+        if (threads == 1) {
+            matchCount = 0;
+            long benchStart = System.nanoTime();
+            for (int i = 0; i < iterations; i++) {
+                matchCount = runPass(engine, parsedUrls);
+            }
+            benchNanos = System.nanoTime() - benchStart;
+        } else {
+            long benchStart = System.nanoTime();
+            matchCount = runParallel(engine, parsedUrls, iterations, threads);
+            benchNanos = System.nanoTime() - benchStart;
         }
-        long benchNanos = System.nanoTime() - benchStart;
 
         long gcCountAfter = totalGcCount();
         long gcTimeAfter = totalGcTimeMs();
@@ -137,6 +156,40 @@ public class BenchmarkRunner {
             }
         }
         return matches;
+    }
+
+    /**
+     * Runs the benchmark with multiple threads, each performing its share of iterations.
+     * All threads share the same {@code RuleEngine} instance to exercise thread-safety.
+     */
+    private static int runParallel(RuleEngine engine, ParsedUrl[] urls, int iterations, int threads) {
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        List<Future<Integer>> futures = new ArrayList<>(threads);
+
+        int baseIters = iterations / threads;
+        int remainder = iterations % threads;
+
+        for (int t = 0; t < threads; t++) {
+            int iters = baseIters + (t < remainder ? 1 : 0);
+            futures.add(executor.submit(() -> {
+                int lastMatches = 0;
+                for (int i = 0; i < iters; i++) {
+                    lastMatches = runPass(engine, urls);
+                }
+                return lastMatches;
+            }));
+        }
+
+        int matchCount = 0;
+        for (Future<Integer> f : futures) {
+            try {
+                matchCount = f.get();
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException("Benchmark thread failed", e);
+            }
+        }
+        executor.shutdown();
+        return matchCount;
     }
 
     private static void writeRulesJson(List<Rule> rules, Path path) throws IOException {

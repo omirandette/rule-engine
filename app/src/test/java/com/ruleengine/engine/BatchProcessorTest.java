@@ -6,7 +6,9 @@ import com.ruleengine.rule.Rule;
 import com.ruleengine.url.UrlPart;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -75,5 +77,27 @@ class BatchProcessorTest {
         BatchProcessor processor = new BatchProcessor(engine);
         List<BatchProcessor.UrlResult> results = processor.processLines(List.of());
         assertTrue(results.isEmpty());
+    }
+
+    @Test
+    void parallelProcessingPreservesOrder() {
+        Rule r = rule("host-match", 1, "matched",
+                cond(UrlPart.HOST, Operator.EQUALS, "example.com"));
+        RuleEngine engine = new RuleEngine(List.of(r));
+        BatchProcessor processor = new BatchProcessor(engine);
+
+        List<String> urls = new ArrayList<>(
+                IntStream.range(0, 10_000)
+                        .mapToObj(i -> "https://example.com/page/" + i)
+                        .toList());
+
+        List<BatchProcessor.UrlResult> results = processor.processLines(urls);
+
+        assertEquals(urls.size(), results.size());
+        for (int i = 0; i < urls.size(); i++) {
+            assertEquals("https://example.com/page/" + i, results.get(i).url(),
+                    "Result at index " + i + " has wrong URL");
+            assertEquals("matched", results.get(i).result());
+        }
     }
 }
