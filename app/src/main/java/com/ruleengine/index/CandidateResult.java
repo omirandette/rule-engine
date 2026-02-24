@@ -1,7 +1,5 @@
 package com.ruleengine.index;
 
-import java.util.Arrays;
-
 /**
  * Dense array-based container tracking how many non-negated conditions
  * are satisfied per rule.
@@ -10,11 +8,16 @@ import java.util.Arrays;
  * at most one match per URL, so a simple counter is equivalent to set membership.
  * A rule's non-negated conditions are fully met when
  * {@code satisfiedCounts[ruleId] == nonNegatedCounts[ruleId]}.
+ *
+ * <p>Uses sparse reset: only rule IDs touched during {@link #increment(int)} are
+ * zeroed in {@link #reset()}, turning O(ruleCount) into O(touched).
  */
 public final class CandidateResult {
 
     private final int[] satisfiedCounts;
     private final int[] nonNegatedCounts;
+    private final int[] dirty;
+    private int dirtyCount;
 
     /**
      * Creates a result container sized for the given number of rules.
@@ -25,22 +28,29 @@ public final class CandidateResult {
     public CandidateResult(int ruleCount, int[] nonNegatedCounts) {
         this.satisfiedCounts = new int[ruleCount];
         this.nonNegatedCounts = nonNegatedCounts;
+        this.dirty = new int[ruleCount];
     }
 
     /**
-     * Resets all satisfied counts to zero so this instance can be reused.
+     * Resets only the touched entries so this instance can be reused.
      */
     public void reset() {
-        Arrays.fill(satisfiedCounts, 0);
+        for (int i = 0; i < dirtyCount; i++) {
+            satisfiedCounts[dirty[i]] = 0;
+        }
+        dirtyCount = 0;
     }
 
     /**
      * Increments the satisfied count for the rule at the given ID.
+     * Tracks the rule ID for sparse reset on first touch.
      *
      * @param ruleId the dense rule ID
      */
     public void increment(int ruleId) {
-        satisfiedCounts[ruleId]++;
+        if (satisfiedCounts[ruleId]++ == 0) {
+            dirty[dirtyCount++] = ruleId;
+        }
     }
 
     /**
