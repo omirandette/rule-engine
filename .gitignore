@@ -6,3 +6,6 @@ build
 
 # Ignore Kotlin plugin data
 .kotlin
+
+# Claude Code local settings (user-specific)
+.claude/settings.local.json

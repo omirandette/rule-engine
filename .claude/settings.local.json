@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(brew info openjdk 2>&1 | head -5)",
-      "WebSearch",
-      "Bash(export PATH=\"/opt/homebrew/opt/openjdk/bin:$PATH\" && ./gradlew run 2>&1)"
-    ]
-  }
-}
