@@ -6,7 +6,6 @@ import com.ruleengine.url.ParsedUrl;
 import com.ruleengine.url.UrlPart;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,9 +22,15 @@ import java.util.function.Consumer;
  *   <li>{@code CONTAINS} — {@link AhoCorasick} automaton for multi-pattern substring matching</li>
  * </ul>
  *
+ * <p>Per-part indexes are stored in flat arrays indexed by {@link UrlPart#ordinal()}
+ * to avoid {@code EnumMap} lookup overhead in the hot path.
+ *
  * <p>Negated conditions are excluded from the index and must be evaluated directly at match time.
  */
 public final class RuleIndex {
+
+    private static final UrlPart[] PARTS = UrlPart.values();
+    private static final int PART_COUNT = PARTS.length;
 
     /**
      * A reference linking a match back to its parent rule by dense ID.
@@ -34,10 +39,14 @@ public final class RuleIndex {
      */
     public record ConditionRef(int ruleId) {}
 
-    private final Map<UrlPart, Map<String, List<ConditionRef>>> equalsIndexes;
-    private final Map<UrlPart, Trie<ConditionRef>> startsWithIndexes;
-    private final Map<UrlPart, Trie<ConditionRef>> endsWithIndexes;
-    private final Map<UrlPart, AhoCorasick<ConditionRef>> containsAcIndexes;
+    @SuppressWarnings("unchecked")
+    private final Map<String, List<ConditionRef>>[] equalsIndexes = new HashMap[PART_COUNT];
+    @SuppressWarnings("unchecked")
+    private final Trie<ConditionRef>[] startsWithIndexes = new Trie[PART_COUNT];
+    @SuppressWarnings("unchecked")
+    private final Trie<ConditionRef>[] endsWithIndexes = new Trie[PART_COUNT];
+    @SuppressWarnings("unchecked")
+    private final AhoCorasick<ConditionRef>[] containsAcIndexes = new AhoCorasick[PART_COUNT];
 
     private final Map<Rule, Integer> ruleIds;
     private final int ruleCount;
@@ -64,11 +73,6 @@ public final class RuleIndex {
      * @param rules the rules to index
      */
     public RuleIndex(List<Rule> rules) {
-        this.equalsIndexes = new EnumMap<>(UrlPart.class);
-        this.startsWithIndexes = new EnumMap<>(UrlPart.class);
-        this.endsWithIndexes = new EnumMap<>(UrlPart.class);
-        this.containsAcIndexes = new EnumMap<>(UrlPart.class);
-
         this.ruleIds = new HashMap<>(rules.size() * 2);
         for (int i = 0; i < rules.size(); i++) {
             ruleIds.put(rules.get(i), i);
@@ -76,11 +80,11 @@ public final class RuleIndex {
         this.ruleCount = rules.size();
         this.nonNegatedCounts = new int[ruleCount];
 
-        for (UrlPart part : UrlPart.values()) {
-            equalsIndexes.put(part, new HashMap<>());
-            startsWithIndexes.put(part, new Trie<>());
-            endsWithIndexes.put(part, new Trie<>());
-            containsAcIndexes.put(part, new AhoCorasick<>());
+        for (int p = 0; p < PART_COUNT; p++) {
+            equalsIndexes[p] = new HashMap<>();
+            startsWithIndexes[p] = new Trie<>();
+            endsWithIndexes[p] = new Trie<>();
+            containsAcIndexes[p] = new AhoCorasick<>();
         }
 
         for (Rule rule : rules) {
@@ -92,17 +96,16 @@ public final class RuleIndex {
             }
         }
 
-        for (AhoCorasick<ConditionRef> ac : containsAcIndexes.values()) {
-            ac.build();
+        for (int p = 0; p < PART_COUNT; p++) {
+            containsAcIndexes[p].build();
         }
 
         this.threadContext = ThreadLocal.withInitial(
                 () -> new QueryContext(ruleCount, nonNegatedCounts));
 
-        UrlPart[] parts = UrlPart.values();
-        this.hasEndsWith = new boolean[parts.length];
-        for (UrlPart part : parts) {
-            hasEndsWith[part.ordinal()] = !endsWithIndexes.get(part).isEmpty();
+        this.hasEndsWith = new boolean[PART_COUNT];
+        for (int p = 0; p < PART_COUNT; p++) {
+            hasEndsWith[p] = !endsWithIndexes[p].isEmpty();
         }
     }
 
@@ -110,15 +113,16 @@ public final class RuleIndex {
     private void indexCondition(Condition cond, int ruleId) {
         nonNegatedCounts[ruleId]++;
         ConditionRef ref = new ConditionRef(ruleId);
+        int p = cond.part().ordinal();
         switch (cond.operator()) {
-            case EQUALS -> equalsIndexes.get(cond.part())
+            case EQUALS -> equalsIndexes[p]
                     .computeIfAbsent(cond.value(), _ -> new ArrayList<>())
                     .add(ref);
-            case STARTS_WITH -> startsWithIndexes.get(cond.part())
+            case STARTS_WITH -> startsWithIndexes[p]
                     .insert(cond.value(), ref);
-            case ENDS_WITH -> endsWithIndexes.get(cond.part())
+            case ENDS_WITH -> endsWithIndexes[p]
                     .insert(new StringBuilder(cond.value()).reverse().toString(), ref);
-            case CONTAINS -> containsAcIndexes.get(cond.part())
+            case CONTAINS -> containsAcIndexes[p]
                     .insert(cond.value(), ref);
         }
     }
@@ -162,19 +166,20 @@ public final class RuleIndex {
         QueryContext ctx = threadContext.get();
         ctx.candidates.reset();
 
-        for (UrlPart part : UrlPart.values()) {
+        for (UrlPart part : PARTS) {
+            int p = part.ordinal();
             String value = url.part(part);
 
-            List<ConditionRef> eqRefs = equalsIndexes.get(part).get(value);
+            List<ConditionRef> eqRefs = equalsIndexes[p].get(value);
             if (eqRefs != null) {
-                for (ConditionRef ref : eqRefs) {
-                    ctx.incrementConsumer.accept(ref);
+                for (int i = 0, size = eqRefs.size(); i < size; i++) {
+                    ctx.incrementConsumer.accept(eqRefs.get(i));
                 }
             }
 
-            startsWithIndexes.get(part).findPrefixesOf(value, ctx.incrementConsumer);
+            startsWithIndexes[p].findPrefixesOf(value, ctx.incrementConsumer);
 
-            if (hasEndsWith[part.ordinal()]) {
+            if (hasEndsWith[p]) {
                 int len = value.length();
                 if (len > ctx.reverseBuf.length) {
                     ctx.reverseBuf = new char[len];
@@ -182,10 +187,10 @@ public final class RuleIndex {
                 for (int i = 0; i < len; i++) {
                     ctx.reverseBuf[i] = value.charAt(len - 1 - i);
                 }
-                endsWithIndexes.get(part).findPrefixesOf(ctx.reverseBuf, len, ctx.incrementConsumer);
+                endsWithIndexes[p].findPrefixesOf(ctx.reverseBuf, len, ctx.incrementConsumer);
             }
 
-            containsAcIndexes.get(part).search(value, ctx.incrementConsumer);
+            containsAcIndexes[p].search(value, ctx.incrementConsumer);
         }
         return ctx.candidates;
     }

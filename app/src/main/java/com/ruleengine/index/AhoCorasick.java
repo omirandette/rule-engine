@@ -52,12 +52,13 @@ public final class AhoCorasick<V> {
     private List<List<V>> buildOutput = new ArrayList<>(INITIAL_CAPACITY);
     private int stateCount = 0;
 
+    private static final Object[] EMPTY_OUTPUT = new Object[0];
+
     // Search-phase arrays (populated by build, one entry per state)
     private int[][] gotoTable;
     @SuppressWarnings("unchecked")
     private Map<Character, Integer>[] extendedGoto;
-    @SuppressWarnings("unchecked")
-    private List<V>[] output;
+    private Object[][] output;
     private boolean built = false;
 
     /** Creates a new empty automaton with the root state allocated. */
@@ -242,7 +243,12 @@ public final class AhoCorasick<V> {
     private void flattenToArrays() {
         gotoTable = gotoRows.toArray(new int[0][]);
         extendedGoto = extendedRows.toArray(new Map[0]);
-        output = buildOutput.toArray(new List[0]);
+
+        output = new Object[stateCount][];
+        for (int i = 0; i < stateCount; i++) {
+            List<V> list = buildOutput.get(i);
+            output[i] = list.isEmpty() ? EMPTY_OUTPUT : list.toArray();
+        }
 
         gotoRows = null;
         extendedRows = null;
@@ -257,6 +263,7 @@ public final class AhoCorasick<V> {
      * @param consumer called for each matching value
      * @throws IllegalStateException if {@link #build()} has not been called
      */
+    @SuppressWarnings("unchecked")
     public void search(String text, Consumer<V> consumer) {
         if (!built) {
             throw new IllegalStateException("Must call build() before search()");
@@ -267,14 +274,9 @@ public final class AhoCorasick<V> {
         int state = 0;
         for (int i = 0; i < text.length(); i++) {
             state = nextState(state, text.charAt(i));
-            // output[] is never null (every state gets an empty list in allocateState);
-            // the isEmpty() guard avoids for-each overhead on the majority of states
-            // that have no pattern endings.
-            List<V> matches = output[state];
-            if (!matches.isEmpty()) {
-                for (V v : matches) {
-                    consumer.accept(v);
-                }
+            Object[] matches = output[state];
+            for (int j = 0; j < matches.length; j++) {
+                consumer.accept((V) matches[j]);
             }
         }
     }
@@ -286,9 +288,23 @@ public final class AhoCorasick<V> {
      * @return list of values for all patterns found in the text
      * @throws IllegalStateException if {@link #build()} has not been called
      */
+    @SuppressWarnings("unchecked")
     public List<V> search(String text) {
+        if (!built) {
+            throw new IllegalStateException("Must call build() before search()");
+        }
         List<V> result = new ArrayList<>();
-        search(text, result::add);
+        for (V v : emptyPatternValues) {
+            result.add(v);
+        }
+        int state = 0;
+        for (int i = 0; i < text.length(); i++) {
+            state = nextState(state, text.charAt(i));
+            Object[] matches = output[state];
+            for (int j = 0; j < matches.length; j++) {
+                result.add((V) matches[j]);
+            }
+        }
         return result;
     }
 
