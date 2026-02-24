@@ -92,4 +92,13 @@ class AhoCorasickTest {
         List<String> result = ac.search("/category/sport/items");
         assertTrue(result.contains("val"));
     }
+
+    @Test
+    void nonAsciiPattern() {
+        AhoCorasick<String> ac = new AhoCorasick<>();
+        ac.insert("\u00E9l\u00E8ve", "found");
+        ac.build();
+        List<String> result = ac.search("un \u00E9l\u00E8ve ici");
+        assertTrue(result.contains("found"));
+    }
 }
