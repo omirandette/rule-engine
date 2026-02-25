@@ -1,6 +1,21 @@
+use std::cell::RefCell;
+
 use crate::rule::{Condition, Operator, Rule};
-use crate::rule_index::RuleIndex;
+use crate::rule_index::{CandidateResult, RuleIndex};
 use crate::url::ParsedUrl;
+
+/// Thread-local reusable buffers for evaluate().
+struct QueryContext {
+    candidates: CandidateResult,
+    reverse_buf: Vec<u8>,
+}
+
+thread_local! {
+    static QUERY_CTX: RefCell<QueryContext> = RefCell::new(QueryContext {
+        candidates: CandidateResult::new(),
+        reverse_buf: Vec::new(),
+    });
+}
 
 /// Bundles a rule with its precomputed index ID and negation flag.
 struct SortedEntry {
@@ -52,19 +67,28 @@ impl RuleEngine {
     /// Evaluates a parsed URL against all rules and returns the result of the
     /// highest-priority matching rule, or `None` if no rule matches.
     pub fn evaluate(&self, url: &ParsedUrl) -> Option<&str> {
-        let candidates = self.index.query_candidates(url);
+        QUERY_CTX.with(|ctx| {
+            let mut ctx = ctx.borrow_mut();
+            let QueryContext {
+                ref mut candidates,
+                ref mut reverse_buf,
+            } = *ctx;
+            self.index.query_candidates_into(url, candidates, reverse_buf);
 
-        for entry in &self.entries {
-            if !candidates.is_candidate(entry.rule_id) && !entry.all_negated {
-                continue;
+            let non_negated = self.index.non_negated_counts();
+
+            for entry in &self.entries {
+                if !ctx.candidates.is_candidate(entry.rule_id) && !entry.all_negated {
+                    continue;
+                }
+                if ctx.candidates.all_satisfied(entry.rule_id, non_negated)
+                    && self.no_negated_conditions_match(&self.rules[entry.rule_index], url)
+                {
+                    return Some(self.rules[entry.rule_index].result.as_str());
+                }
             }
-            if candidates.all_satisfied(entry.rule_id)
-                && self.no_negated_conditions_match(&self.rules[entry.rule_index], url)
-            {
-                return Some(&self.rules[entry.rule_index].result);
-            }
-        }
-        None
+            None
+        })
     }
 
     /// Returns `true` if none of the rule's negated conditions match the URL.

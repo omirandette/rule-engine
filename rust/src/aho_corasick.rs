@@ -209,6 +209,28 @@ impl<V: Clone> AhoCorasick<V> {
         }
     }
 
+    /// Byte-oriented search. Iterates `text.as_bytes()` directly, using
+    /// the goto table for bytes < 128 and resetting to state 0 for
+    /// bytes >= 128 (safe since all patterns are ASCII).
+    pub fn search_bytes(&self, text: &str, callback: &mut impl FnMut(&V)) {
+        debug_assert!(self.built, "Must call build() before search_bytes()");
+
+        for v in &self.empty_pattern_values {
+            callback(v);
+        }
+        let mut state = 0u32;
+        for &b in text.as_bytes() {
+            if b < 128 {
+                state = self.goto_table[state as usize][b as usize];
+            } else {
+                state = 0;
+            }
+            for v in &*self.output[state as usize] {
+                callback(v);
+            }
+        }
+    }
+
     /// Searches the text and returns all matching values.
     pub fn search_collect(&self, text: &str) -> Vec<V> {
         let mut result = Vec::new();
@@ -555,4 +577,40 @@ mod tests {
         assert!(result.contains(&7));
     }
 
+    #[test]
+    fn search_bytes_finds_single_pattern() {
+        let mut ac = AhoCorasick::new();
+        ac.insert("he", 1u32);
+        ac.build();
+        let mut result = Vec::new();
+        ac.search_bytes("she", &mut |v| result.push(*v));
+        assert!(result.contains(&1));
+    }
+
+    #[test]
+    fn search_bytes_finds_multiple_patterns() {
+        let mut ac = AhoCorasick::new();
+        ac.insert("he", 1u32);
+        ac.insert("she", 2u32);
+        ac.insert("his", 3u32);
+        ac.insert("hers", 4u32);
+        ac.build();
+
+        let mut result = Vec::new();
+        ac.search_bytes("shers", &mut |v| result.push(*v));
+        assert!(result.contains(&1), "should find 'he'");
+        assert!(result.contains(&2), "should find 'she'");
+        assert!(result.contains(&4), "should find 'hers'");
+        assert!(!result.contains(&3), "should not find 'his'");
+    }
+
+    #[test]
+    fn search_bytes_empty_pattern() {
+        let mut ac = AhoCorasick::new();
+        ac.insert("", 42u32);
+        ac.build();
+        let mut result = Vec::new();
+        ac.search_bytes("anything", &mut |v| result.push(*v));
+        assert!(result.contains(&42));
+    }
 }

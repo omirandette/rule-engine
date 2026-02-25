@@ -28,6 +28,10 @@ impl<V: Clone> TrieNode<V> {
         }
     }
 
+    fn child_byte(&self, b: u8) -> u32 {
+        self.ascii[b as usize]
+    }
+
     fn child_or_create(nodes: &mut Vec<TrieNode<V>>, parent_idx: u32, c: char) -> u32 {
         let pi = parent_idx as usize;
         if (c as u32) < ASCII_SIZE as u32 {
@@ -112,6 +116,29 @@ impl<V: Clone> Trie<V> {
                     }
                 }
                 None => return,
+            }
+        }
+    }
+
+    /// Byte-oriented prefix search. Iterates `&[u8]` directly, using the
+    /// inline ASCII array for bytes < 128 and returning immediately for
+    /// bytes >= 128 (since all indexed patterns are ASCII).
+    pub fn find_prefixes_of_bytes(&self, input: &[u8], callback: &mut impl FnMut(&V)) {
+        for v in &self.empty_key_values {
+            callback(v);
+        }
+        let mut current: u32 = 0;
+        for &b in input {
+            if b >= 128 {
+                return;
+            }
+            let next = self.nodes[current as usize].child_byte(b);
+            if next == NO_NODE {
+                return;
+            }
+            current = next;
+            for v in &self.nodes[current as usize].values {
+                callback(v);
             }
         }
     }
@@ -331,4 +358,47 @@ mod tests {
         assert_eq!(10, result.len());
     }
 
+    #[test]
+    fn bytes_find_prefixes_of_finds_exact_match() {
+        let mut trie = Trie::new();
+        trie.insert("abc", 1u32);
+        let mut result = Vec::new();
+        trie.find_prefixes_of_bytes(b"abc", &mut |v| result.push(*v));
+        assert_eq!(vec![1], result);
+    }
+
+    #[test]
+    fn bytes_find_prefixes_of_finds_multiple_prefixes() {
+        let mut trie = Trie::new();
+        trie.insert("/", 10u32);
+        trie.insert("/api", 20u32);
+        trie.insert("/api/users", 30u32);
+
+        let mut result = Vec::new();
+        trie.find_prefixes_of_bytes(b"/api/users/123", &mut |v| result.push(*v));
+        assert_eq!(3, result.len());
+        assert!(result.contains(&10));
+        assert!(result.contains(&20));
+        assert!(result.contains(&30));
+    }
+
+    #[test]
+    fn bytes_returns_empty_for_no_match() {
+        let mut trie = Trie::new();
+        trie.insert("xyz", 1u32);
+        let mut result = Vec::new();
+        trie.find_prefixes_of_bytes(b"abc", &mut |v| result.push(*v));
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn bytes_stops_at_non_ascii() {
+        let mut trie = Trie::new();
+        trie.insert("abc", 1u32);
+        let mut result = Vec::new();
+        // "ab" + 0xFF + "c" — should stop at the non-ASCII byte
+        let input = &[b'a', b'b', 0xFF, b'c'];
+        trie.find_prefixes_of_bytes(input, &mut |v| result.push(*v));
+        assert!(result.is_empty());
+    }
 }
