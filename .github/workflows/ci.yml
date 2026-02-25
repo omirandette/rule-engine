@@ -11,8 +11,8 @@ permissions:
   checks: write
 
 jobs:
-  build:
-    name: Build & Test
+  java:
+    name: Java Build & Test
     runs-on: ubuntu-latest
 
     steps:
@@ -40,6 +40,7 @@ jobs:
         if: always()
         with:
           report_paths: '**/build/test-results/*/TEST-*.xml'
+          check_name: Java Test Report
 
       - name: Coverage Report
         uses: madrapps/jacoco-report@v1.7.1
@@ -55,3 +56,28 @@ jobs:
           name: rule-engine-dist
           path: app/build/distributions/app.zip
           retention-days: 14
+
+  rust:
+    name: Rust Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build and Test
+        working-directory: rust
+        run: cargo test
