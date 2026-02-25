@@ -78,10 +78,10 @@ impl RuleEngine {
             let non_negated = self.index.non_negated_counts();
 
             for entry in &self.entries {
-                if !ctx.candidates.is_candidate(entry.rule_id) && !entry.all_negated {
+                if !candidates.is_candidate(entry.rule_id) && !entry.all_negated {
                     continue;
                 }
-                if ctx.candidates.all_satisfied(entry.rule_id, non_negated)
+                if candidates.all_satisfied(entry.rule_id, non_negated)
                     && self.no_negated_conditions_match(&self.rules[entry.rule_index], url)
                 {
                     return Some(self.rules[entry.rule_index].result.as_str());
