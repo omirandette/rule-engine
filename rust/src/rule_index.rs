@@ -9,19 +9,24 @@ use crate::url::ParsedUrl;
 /// are satisfied per rule.
 pub struct CandidateResult {
     satisfied_counts: Vec<u32>,
-    non_negated_counts: Vec<u32>,
 }
 
 impl CandidateResult {
-    fn new(rule_count: usize, non_negated_counts: Vec<u32>) -> Self {
+    /// Creates a new empty candidate result.
+    pub fn new() -> Self {
         Self {
-            satisfied_counts: vec![0; rule_count],
-            non_negated_counts,
+            satisfied_counts: Vec::new(),
         }
     }
 
-    fn reset(&mut self) {
-        self.satisfied_counts.fill(0);
+    /// Ensures the internal buffer is at least `n` elements, growing but
+    /// never shrinking. Resets all counts to zero.
+    pub fn ensure_capacity_and_reset(&mut self, n: usize) {
+        if self.satisfied_counts.len() < n {
+            self.satisfied_counts.resize(n, 0);
+        } else {
+            self.satisfied_counts[..n].fill(0);
+        }
     }
 
     fn increment(&mut self, rule_id: u32) {
@@ -29,8 +34,8 @@ impl CandidateResult {
     }
 
     /// Returns `true` if all non-negated conditions for the given rule have been satisfied.
-    pub fn all_satisfied(&self, rule_id: u32) -> bool {
-        self.satisfied_counts[rule_id as usize] == self.non_negated_counts[rule_id as usize]
+    pub fn all_satisfied(&self, rule_id: u32, non_negated_counts: &[u32]) -> bool {
+        self.satisfied_counts[rule_id as usize] == non_negated_counts[rule_id as usize]
     }
 
     /// Returns `true` if the rule has at least one satisfied condition.
@@ -142,19 +147,35 @@ impl RuleIndex {
         self.rule_ids[&rule_index]
     }
 
+    /// Returns the number of rules in the index.
+    pub fn rule_count(&self) -> usize {
+        self.rule_count
+    }
+
+    /// Returns the non-negated condition counts per rule.
+    pub fn non_negated_counts(&self) -> &[u32] {
+        &self.non_negated_counts
+    }
+
     /// Queries the index for all non-negated conditions that match the URL.
     ///
-    /// Returns a `CandidateResult` that must be used before the next call
-    /// (call site should use `thread_local!` for reuse).
+    /// Returns a `CandidateResult` that must be used before the next call.
     pub fn query_candidates(&self, url: &ParsedUrl) -> CandidateResult {
-        let mut candidates = CandidateResult::new(self.rule_count, self.non_negated_counts.clone());
-        self.query_candidates_into(url, &mut candidates);
+        let mut candidates = CandidateResult::new();
+        candidates.ensure_capacity_and_reset(self.rule_count);
+        let mut reverse_buf = Vec::new();
+        self.query_candidates_into(url, &mut candidates, &mut reverse_buf);
         candidates
     }
 
-    /// Queries into an existing CandidateResult (for reuse).
-    pub fn query_candidates_into(&self, url: &ParsedUrl, candidates: &mut CandidateResult) {
-        candidates.reset();
+    /// Queries into an existing CandidateResult and reverse buffer (for reuse).
+    pub fn query_candidates_into(
+        &self,
+        url: &ParsedUrl,
+        candidates: &mut CandidateResult,
+        reverse_buf: &mut Vec<u8>,
+    ) {
+        candidates.ensure_capacity_and_reset(self.rule_count);
 
         for part in UrlPart::ALL {
             let p = part.ordinal();
@@ -170,21 +191,23 @@ impl RuleIndex {
 
             if self.has_starts_with[p] {
                 self.starts_with_indexes[p]
-                    .find_prefixes_of(value, &mut |&id| {
+                    .find_prefixes_of_bytes(value.as_bytes(), &mut |&id| {
                         candidates.increment(id);
                     });
             }
 
             if self.has_ends_with[p] {
-                let reversed: Vec<char> = value.chars().rev().collect();
+                // Reuse reverse_buf instead of allocating Vec<char> each call
+                reverse_buf.clear();
+                reverse_buf.extend(value.bytes().rev());
                 self.ends_with_indexes[p]
-                    .find_prefixes_of_chars(&reversed, &mut |&id| {
+                    .find_prefixes_of_bytes(reverse_buf, &mut |&id| {
                         candidates.increment(id);
                     });
             }
 
             if self.has_contains[p] {
-                self.contains_ac_indexes[p].search(value, &mut |&id| {
+                self.contains_ac_indexes[p].search_bytes(value, &mut |&id| {
                     candidates.increment(id);
                 });
             }
