@@ -103,6 +103,17 @@ tasks.register<JavaExec>("benchmark") {
     workingDir = project.projectDir
 }
 
+tasks.register<JavaExec>("largeBenchmark") {
+    description = "Run benchmark with ~100K rules for stress testing"
+    group = "verification"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.ruleengine.benchmark.BenchmarkRunner"
+    val threadCount = providers.gradleProperty("threads").orElse("1")
+    jvmArgs("-XX:+UseParallelGC", "-Xms4g", "-Xmx4g")
+    args("42", threadCount.get(), "large")
+    workingDir = project.projectDir
+}
+
 tasks.register<JavaExec>("gcBenchmark") {
     description = "Run the benchmark with verbose GC logging for allocation analysis"
     group = "verification"
