@@ -23,6 +23,7 @@
 
 ## Benchmarking & Profiling
 - `./gradlew benchmark` — run rule engine throughput benchmark (~200K URLs, ~2000 rules)
+- `./gradlew largeBenchmark` — run stress benchmark (~200K URLs, ~100K rules, 4GB heap)
 - `./gradlew profileBenchmark -PasyncProfilerLib=<path>` — run benchmark with async-profiler (collapsed stacks output)
   - Optional: `-PprofileEvent=alloc` for allocation profiling (default: `cpu`)
 - `python3 scripts/profile.py` — run profiler and print text summary

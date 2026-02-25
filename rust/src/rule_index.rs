@@ -6,9 +6,10 @@ use crate::trie::Trie;
 use crate::url::ParsedUrl;
 
 /// Dense array-based container tracking how many non-negated conditions
-/// are satisfied per rule.
+/// are satisfied per rule, with sparse tracking of touched rule IDs.
 pub struct CandidateResult {
     satisfied_counts: Vec<u32>,
+    touched: Vec<u32>,
 }
 
 impl CandidateResult {
@@ -16,21 +17,30 @@ impl CandidateResult {
     pub fn new() -> Self {
         Self {
             satisfied_counts: Vec::new(),
+            touched: Vec::new(),
         }
     }
 
-    /// Ensures the internal buffer is at least `n` elements, growing but
-    /// never shrinking. Resets all counts to zero.
+    /// Ensures the internal buffer is at least `n` elements, growing if needed.
+    /// Resets only previously-touched entries instead of the full array.
     pub fn ensure_capacity_and_reset(&mut self, n: usize) {
+        // Zero previously-touched entries first (cleanup from last query)
+        for &id in &self.touched {
+            self.satisfied_counts[id as usize] = 0;
+        }
+        self.touched.clear();
         if self.satisfied_counts.len() < n {
+            // Growth: new elements are filled with 0 by resize
             self.satisfied_counts.resize(n, 0);
-        } else {
-            self.satisfied_counts[..n].fill(0);
         }
     }
 
     fn increment(&mut self, rule_id: u32) {
-        self.satisfied_counts[rule_id as usize] += 1;
+        let slot = &mut self.satisfied_counts[rule_id as usize];
+        if *slot == 0 {
+            self.touched.push(rule_id);
+        }
+        *slot += 1;
     }
 
     /// Returns `true` if all non-negated conditions for the given rule have been satisfied.
